@@ -1,0 +1,27 @@
+﻿# Android
+/android/
+!/android/app/src/main/res/values/styles.xml
+!/android/app/src/main/AndroidManifest.xml
+!/android/app/src/main/kotlin/
+
+# iOS
+/ios/
+!/ios/Runner/Assets.xcassets/
+!/ios/Runner/Info.plist
+
+# Build
+/build/
+/.flutter-plugins
+/.flutter-plugins-dependencies
+/.dart_tool/
+
+# ругое
+.DS_Store
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.iml
+*.log
+pubspec.lock
