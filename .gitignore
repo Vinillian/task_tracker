@@ -9,13 +9,24 @@
 !/ios/Runner/Assets.xcassets/
 !/ios/Runner/Info.plist
 
+# Другие платформы (добавьте эти строки)
+/linux/
+/macos/
+/windows/
+/web/
+
 # Build
 /build/
 /.flutter-plugins
 /.flutter-plugins-dependencies
 /.dart_tool/
+/.packages
+/.metadata
 
-# ругое
+# Файлы зависимостей
+pubspec.lock
+
+# Временные и системные файлы
 .DS_Store
 *.swp
 *.swo
@@ -24,4 +35,13 @@
 .vscode/
 *.iml
 *.log
-pubspec.lock
+Thumbs.db
+
+# Файлы окружения
+.env
+.env.local
+.env.development
+.env.production
+
+# Кэш
+.dart_tool/cache/
