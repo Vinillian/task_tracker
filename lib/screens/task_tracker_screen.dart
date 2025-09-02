@@ -7,8 +7,7 @@ import '../models/progress_history.dart';
 import '../services/storage_service.dart';
 import '../widgets/statistics_widgets.dart';
 import '../widgets/task_widgets.dart';
-import '../widgets/project_widgets.dart';
-import '../widgets/github_calendar.dart';
+
 
 class TaskTrackerScreen extends StatefulWidget {
   const TaskTrackerScreen({super.key});

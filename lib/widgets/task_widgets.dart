@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/user.dart';
-import '../models/project.dart';
-import '../models/task.dart';
-import '../models/subtask.dart';
 import './project_widgets.dart';
 
 class TaskWidgets {
