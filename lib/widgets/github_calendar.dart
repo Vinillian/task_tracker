@@ -103,32 +103,13 @@ class GitHubCalendar extends StatelessWidget {
     }
   }
 
-  Widget _buildEmptyCell() {
-    return Container(
-      width: _cellSize,
-      height: _cellSize,
-      margin: const EdgeInsets.all(_cellMargin),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEBEDF0),
-        borderRadius: BorderRadius.circular(2),
-        border: Border.all(color: const Color(0xFF1B1F230F), width: 0.5),
-      ),
-    );
-  }
-
-  Widget _buildCalendarCell(DateTime date, int steps) {
-    return Container(
-      width: _cellSize,
-      height: _cellSize,
-      margin: const EdgeInsets.all(_cellMargin),
-      decoration: BoxDecoration(
-        color: _getContributionColor(steps),
-        borderRadius: BorderRadius.circular(2),
-        border: Border.all(color: const Color(0xFF1B1F230F), width: 0.5),
-      ),
-      child: Tooltip(
-        message: '${DateFormat('dd MMMM yyyy', 'ru').format(date)}\n$steps шагов',
-        child: const SizedBox.expand(),
+  Widget _buildWeekDayLabel(String day) {
+    return SizedBox(
+      width: 20,
+      child: Text(
+        day,
+        style: const TextStyle(fontSize: 9, color: Colors.black54),
+        textAlign: TextAlign.center,
       ),
     );
   }
@@ -200,20 +181,58 @@ class GitHubCalendar extends StatelessWidget {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         controller: scrollController,
-        reverse: true, // сегодняшний день справа
+        reverse: true,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Метки дней недели
+            // Метки дней недели СЛЕВА от календаря
             Column(
-              children: const [
-                SizedBox(height: 6),
-                SizedBox(width: 20, child: Text('Пн', style: TextStyle(fontSize: 9, color: Colors.black54), textAlign: TextAlign.center)),
-                SizedBox(height: 24),
-                SizedBox(width: 20, child: Text('Ср', style: TextStyle(fontSize: 9, color: Colors.black54), textAlign: TextAlign.center)),
-                SizedBox(height: 24),
-                SizedBox(width: 20, child: Text('Пт', style: TextStyle(fontSize: 9, color: Colors.black54), textAlign: TextAlign.center)),
-                SizedBox(height: 6),
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // Пустое место для заголовка месяцев
+                const SizedBox(height: 28, width: 30),
+                // Понедельник (1 строка)
+                SizedBox(
+                  height: _cellSize + _cellMargin * 2,
+                  child: const Text('Пн',
+                      style: TextStyle(fontSize: 9, color: Colors.black54)),
+                ),
+                // Вторник (2 строка) - ДОБАВИЛИ
+                SizedBox(
+                  height: _cellSize + _cellMargin * 2,
+                  child: const Text('Вт',
+                      style: TextStyle(fontSize: 9, color: Colors.black54)),
+                ),
+                // Среда (3 строка)
+                SizedBox(
+                  height: _cellSize + _cellMargin * 2,
+                  child: const Text('Ср',
+                      style: TextStyle(fontSize: 9, color: Colors.black54)),
+                ),
+                // Четверг (4 строка) - ДОБАВИЛИ
+                SizedBox(
+                  height: _cellSize + _cellMargin * 2,
+                  child: const Text('Чт',
+                      style: TextStyle(fontSize: 9, color: Colors.black54)),
+                ),
+                // Пятница (5 строка)
+                SizedBox(
+                  height: _cellSize + _cellMargin * 2,
+                  child: const Text('Пт',
+                      style: TextStyle(fontSize: 9, color: Colors.black54)),
+                ),
+                // Суббота (6 строка) - ДОБАВИЛИ
+                SizedBox(
+                  height: _cellSize + _cellMargin * 2,
+                  child: const Text('Сб',
+                      style: TextStyle(fontSize: 9, color: Colors.black54)),
+                ),
+                // Воскресенье (7 строка) - ДОБАВИЛИ
+                SizedBox(
+                  height: _cellSize + _cellMargin * 2,
+                  child: const Text('Вс',
+                      style: TextStyle(fontSize: 9, color: Colors.black54)),
+                ),
               ],
             ),
             const SizedBox(width: 8),
@@ -222,7 +241,8 @@ class GitHubCalendar extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildMonthHeaders(weeks),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
+                // Сетка календаря
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: weeks.map((week) {
@@ -231,9 +251,35 @@ class GitHubCalendar extends StatelessWidget {
                       child: Column(
                         children: List.generate(7, (day) {
                           if (day < week.length && week[day].year > 1) {
-                            return _buildCalendarCell(week[day], contributions[week[day]] ?? 0);
+                            final date = week[day];
+                            final dayContributions = contributions[date] ?? 0;
+                            final color = _getContributionColor(dayContributions);
+
+                            return Container(
+                              width: _cellSize,
+                              height: _cellSize,
+                              margin: const EdgeInsets.all(_cellMargin),
+                              decoration: BoxDecoration(
+                                color: color,
+                                borderRadius: BorderRadius.circular(2),
+                                border: Border.all(color: const Color(0xFF1B1F230F), width: 0.5),
+                              ),
+                              child: Tooltip(
+                                message: '${DateFormat('dd MMMM yyyy').format(date)}\n$dayContributions шагов',
+                                child: const SizedBox.expand(),
+                              ),
+                            );
                           } else {
-                            return _buildEmptyCell();
+                            return Container(
+                              width: _cellSize,
+                              height: _cellSize,
+                              margin: const EdgeInsets.all(_cellMargin),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEBEDF0),
+                                borderRadius: BorderRadius.circular(2),
+                                border: Border.all(color: const Color(0xFF1B1F230F), width: 0.5),
+                              ),
+                            );
                           }
                         }),
                       ),
