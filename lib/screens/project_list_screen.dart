@@ -4,7 +4,7 @@ import '../models/user.dart';
 import '../models/project.dart';
 import 'project_detail_screen.dart';
 import 'drawer_screen.dart';
-import 'project_detail_screen.dart';
+
 
 class ProjectListScreen extends StatefulWidget {
   final User? currentUser;

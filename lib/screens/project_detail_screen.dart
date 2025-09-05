@@ -1,4 +1,3 @@
-// project_detail_screen.dart
 import 'package:flutter/material.dart';
 import '../models/project.dart';
 import '../models/task.dart';
@@ -467,11 +466,19 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  // Добавьте этот метод после других методов, но перед _buildTaskList()
+  // Добавьте эти методы ПЕРЕД _buildTaskList
   Color _getProgressColor(double progress) {
     if (progress >= 1.0) return Colors.green;
     if (progress >= 0.7) return Colors.orange;
     if (progress >= 0.3) return Colors.yellow;
+    return Colors.red;
+  }
+
+  Color _getSubtaskProgressColor(double progress) {
+    if (progress >= 1.0) return Colors.green;
+    if (progress >= 0.7) return Colors.lightGreen;
+    if (progress >= 0.4) return Colors.orange;
+    if (progress >= 0.1) return Colors.amber;
     return Colors.red;
   }
 
@@ -480,6 +487,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       itemCount: widget.project.tasks.length,
       itemBuilder: (context, taskIndex) {
         final task = widget.project.tasks[taskIndex];
+        // Прогресс задачи
+        double taskProgress = task.totalSteps > 0
+            ? task.completedSteps / task.totalSteps
+            : 0;
+
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
           child: Padding(
@@ -487,7 +499,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ЗАГОЛОВОК ЗАДАЧИ (ТОЛЬКО ОДИН РАЗ!)
                 Row(
                   children: [
                     Expanded(
@@ -512,9 +523,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
                 // Прогресс задачи
                 LinearProgressIndicator(
-                  value: task.totalSteps > 0 ? task.completedSteps / task.totalSteps : 0,
+                  value: taskProgress,
                   backgroundColor: Colors.grey[300],
-                  color: _getProgressColor(task.completedSteps / task.totalSteps),
+                  color: _getProgressColor(taskProgress),
                 ),
 
                 const SizedBox(height: 8),
@@ -543,7 +554,20 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   ...task.subtasks.asMap().entries.map((entry) {
                     final subtaskIndex = entry.key;
                     final subtask = entry.value;
+                    final subtaskProgress = subtask.totalSteps > 0
+                        ? (subtask.completedSteps / subtask.totalSteps).toDouble()
+                        : 0.0;
+                    final progressColor = _getSubtaskProgressColor(subtaskProgress);
+
                     return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: progressColor.withOpacity(0.2),
+                        foregroundColor: progressColor,
+                        child: Text(
+                          '${(subtaskProgress * 100).toInt()}%',
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
                       title: Text(subtask.name),
                       subtitle: Text('${subtask.completedSteps}/${subtask.totalSteps} шагов'),
                       trailing: Row(
@@ -569,6 +593,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       },
     );
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -623,3 +648,4 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 }
+
