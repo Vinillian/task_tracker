@@ -17,6 +17,7 @@ class GitHubCalendar extends StatelessWidget {
     final now = DateTime.now();
     final startDate = DateTime(now.year - 1, now.month, now.day);
 
+    // Заполняем все даты нулями
     var currentDate = startDate;
     while (currentDate.isBefore(now) || currentDate.isAtSameMomentAs(now)) {
       final date = DateTime(currentDate.year, currentDate.month, currentDate.day);
@@ -25,12 +26,25 @@ class GitHubCalendar extends StatelessWidget {
     }
 
     if (currentUser != null) {
+      print('=== CALENDAR DEBUG ===');
+      print('User: ${currentUser!.name}');
+      print('Progress history items: ${currentUser!.progressHistory.length}');
+
       for (final history in currentUser!.progressHistory) {
-        final date = DateTime(history.date.year, history.date.month, history.date.day);
-        if (contributions.containsKey(date)) {
-          contributions[date] = contributions[date]! + history.stepsAdded;
+        // Нормализуем дату истории (убираем время)
+        final historyDate = DateTime(history.date.year, history.date.month, history.date.day);
+        print('History item: $historyDate - ${history.stepsAdded} steps - ${history.itemName}');
+
+        if (contributions.containsKey(historyDate)) {
+          contributions[historyDate] = contributions[historyDate]! + history.stepsAdded;
+          print('✓ ADDED to calendar: $historyDate - ${history.stepsAdded} steps');
+        } else {
+          print('✗ SKIPPED (out of range): $historyDate');
         }
       }
+
+      print('Calendar date range: ${contributions.keys.first} to ${contributions.keys.last}');
+      print('=====================');
     }
 
     return contributions;
@@ -328,6 +342,15 @@ class GitHubCalendar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final contributions = _getDailyContributions();
+
+    // DEBUG: посмотрим что собирается
+    print('=== CALENDAR DEBUG ===');
+    print('User: ${currentUser?.name}');
+    print('Progress history: ${currentUser?.progressHistory.length} items');
+    contributions.forEach((date, steps) {
+      if (steps > 0) print('$date: $steps steps');
+    });
+    print('=====================');
 
     return Card(
       margin: const EdgeInsets.all(16),
