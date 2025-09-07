@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/user.dart';
-import '../models/project.dart';
-import '../models/task.dart';
-import '../models/subtask.dart';
 import './project_widgets.dart';
+import '../models/progress_history.dart';
 
 class TaskWidgets {
   static Widget buildTasksTab({
@@ -197,4 +195,5 @@ class TaskWidgets {
       ),
     );
   }
+
 }

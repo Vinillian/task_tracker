@@ -7,7 +7,7 @@ import '../models/progress_history.dart';
 import '../services/storage_service.dart';
 import '../widgets/statistics_widgets.dart';
 import '../widgets/task_widgets.dart';
-import '../widgets/project_widgets.dart';
+import 'project_list_screen.dart';
 
 class TaskTrackerScreen extends StatefulWidget {
   const TaskTrackerScreen({super.key});
@@ -41,7 +41,15 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _loadData();
+    _loadData().then((_) {
+      if (currentUser == null) {
+        setState(() {
+          users.add(User(name: 'Новый пользователь', projects: [], progressHistory: []));
+          currentUser = users[0];
+          _saveData();
+        });
+      }
+    });
   }
 
   @override
@@ -67,10 +75,18 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
   }
 
   Future<void> _loadData() async {
+    print('Loading data...');
     final loadedUsers = await _storageService.loadData();
+    print('Loaded ${loadedUsers.length} users');
+
     setState(() {
       users = loadedUsers;
       if (users.isNotEmpty) {
+        currentUser = users[0];
+        print('Current user set to: ${currentUser?.name}');
+      } else {
+        print('No users found, creating default user');
+        users.add(User(name: 'Default User', projects: [], progressHistory: []));
         currentUser = users[0];
       }
     });
@@ -84,8 +100,12 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     if (currentUser == null) return;
 
     final now = DateTime.now();
+    final date = DateTime(now.year, now.month, now.day);
+
+    print('Adding progress: $itemName, $stepsAdded steps, $date');
+
     final history = ProgressHistory(
-      date: now,
+      date: date,
       itemName: itemName,
       stepsAdded: stepsAdded,
       itemType: itemType,
@@ -95,6 +115,11 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
       currentUser!.progressHistory.add(history);
       _saveData();
     });
+  }
+
+  void _handleAddProject() {
+    print('Add project button pressed');
+    _addProject();
   }
 
   TextEditingController _getTaskNameController(int projectIndex) {
@@ -133,17 +158,27 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     return _subtaskStepsControllers[key]!;
   }
 
+  void _handleDataImported(List<User> importedUsers) {
+    setState(() {
+      users = importedUsers;
+      currentUser = users.isNotEmpty ? users[0] : null;
+    });
+    _saveData();
+  }
+
   @override
   Widget build(BuildContext context) {
+    print('Building TaskTrackerScreen, currentUser: ${currentUser?.name}');
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('📊 Трекер задач с подзадачами'),
+        title: const Text('📊 Трекер задач'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
-            Tab(icon: Icon(Icons.list), text: 'Задачи'),
+            Tab(icon: Icon(Icons.list), text: 'Проекты'),
             Tab(icon: Icon(Icons.bar_chart), text: 'Статистика'),
           ],
         ),
@@ -151,63 +186,87 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildTasksTab(),
+          ProjectListScreen(
+            currentUser: currentUser,
+            onUserChanged: (user) {
+              print('User changed to: ${user?.name}');
+              setState(() => currentUser = user);
+            },
+            onAddProject: _addProject,
+            onDeleteProject: _deleteProject,
+            onAddProgressHistory: _addProgressHistory,
+            storageService: _storageService,
+            users: users,
+            onDataImported: _handleDataImported,
+          ),
           StatisticsWidgets.buildStatisticsTab(currentUser),
         ],
       ),
     );
   }
 
-  Widget _buildTasksTab() {
-    return TaskWidgets.buildTasksTab(
-      users: users,
-      currentUser: currentUser,
-      showUserInput: _showUserInput,
-      userController: _userController,
-      projectController: _projectController,
-      showProjectInput: _showProjectInput,
-      showTaskInput: _showTaskInput,
-      showSubtaskInput: _showSubtaskInput,
-      onUserChanged: (user) => setState(() => currentUser = user),
-      onShowUserInputChanged: (value) => setState(() => _showUserInput = value),
-      onShowProjectInputChanged: (value) => setState(() => _showProjectInput = value),
-      onShowTaskInputChanged: (index, value) => setState(() => _showTaskInput[index] = value),
-      onShowSubtaskInputChanged: (key, value) => setState(() => _showSubtaskInput[key] = value),
-      onAddUser: _addUser,
-      onAddProject: _addProject,
-      getTaskNameController: _getTaskNameController,
-      getTaskStepsController: _getTaskStepsController,
-      getSubtaskNameController: _getSubtaskNameController,
-      getSubtaskStepsController: _getSubtaskStepsController,
-      onAddTask: _addTask,
-      onAddSubtask: _addSubtask,
-      onAddIncrementalProgress: _addIncrementalProgress,
-    );
-  }
-
   void _addUser() {
     if (_userController.text.isNotEmpty) {
       setState(() {
-        users.add(User(name: _userController.text, projects: [], progressHistory: []));
-        currentUser = users.last;
+        final newUser = User(name: _userController.text, projects: [], progressHistory: []);
+        users.add(newUser);
+        currentUser = newUser;
         _userController.clear();
         _showUserInput = false;
         _saveData();
+        print('User created and set as current: ${newUser.name}');
       });
     }
   }
 
   void _addProject() {
-    if (currentUser == null) return;
-
-    if (_projectController.text.isNotEmpty) {
-      setState(() {
-        currentUser!.projects.add(Project(name: _projectController.text, tasks: []));
-        _projectController.clear();
-        _showProjectInput = false;
-        _saveData();
-      });
+    print('_addProject called');
+    if (currentUser == null) {
+      print("Ошибка: currentUser is null!");
+      return;
     }
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        final controller = TextEditingController();
+        return AlertDialog(
+          title: const Text('Новый проект'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(hintText: 'Название проекта'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Отмена'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (controller.text.isNotEmpty) {
+                  setState(() {
+                    currentUser!.projects.add(Project(
+                      name: controller.text,
+                      tasks: [],
+                    ));
+                    _saveData();
+                  });
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Создать'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _deleteProject(Project project) {
+    setState(() {
+      currentUser?.projects.remove(project);
+      _saveData();
+    });
   }
 
   void _addTask(int projectIndex) {

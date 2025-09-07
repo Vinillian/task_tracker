@@ -1,20 +1,22 @@
+// main.dart
 import 'package:flutter/material.dart';
-import 'screens/task_tracker_screen.dart';
+import 'screens/task_tracker_screen.dart'; // Убедитесь что этот импорт есть
 
 void main() {
-  runApp(const TaskTrackerApp());
+  runApp(const MyApp());
 }
 
-class TaskTrackerApp extends StatelessWidget {
-  const TaskTrackerApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Трекер задач с подзадачами',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: const TaskTrackerScreen(),
+      title: 'Task Tracker',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: const TaskTrackerScreen(), // Главный экран
     );
   }
 }
