@@ -2,32 +2,35 @@ import 'subtask.dart';
 
 class Task {
   String name;
-  int totalSteps;
   int completedSteps;
+  int totalSteps;
   List<Subtask> subtasks;
 
   Task({
     required this.name,
+    this.completedSteps = 0,
     required this.totalSteps,
-    required this.completedSteps,
-    required this.subtasks,
-  });
+    List<Subtask>? subtasks,
+  }) : subtasks = subtasks ?? [];
 
-  Map<String, dynamic> toJson() => {
-    'name': name,
-    'totalSteps': totalSteps,
-    'completedSteps': completedSteps,
-    'subtasks': subtasks.map((s) => s.toJson()).toList(),
-  };
+  Map<String, dynamic> toFirestore() {
+    return {
+      'name': name,
+      'completedSteps': completedSteps,
+      'totalSteps': totalSteps,
+      'subtasks': subtasks.map((s) => s.toFirestore()).toList(),
+    };
+  }
 
-  factory Task.fromJson(Map<String, dynamic> json) {
+  static Task fromFirestore(Map<String, dynamic> data) {
     return Task(
-      name: json['name'],
-      totalSteps: json['totalSteps'],
-      completedSteps: json['completedSteps'],
-      subtasks: (json['subtasks'] as List)
-          .map((s) => Subtask.fromJson(s))
-          .toList(),
+      name: data['name'] ?? '',
+      completedSteps: data['completedSteps'] ?? 0,
+      totalSteps: data['totalSteps'] ?? 1,
+      subtasks: (data['subtasks'] as List<dynamic>?)
+          ?.map((s) => Subtask.fromFirestore(s))
+          .toList() ??
+          [],
     );
   }
 }

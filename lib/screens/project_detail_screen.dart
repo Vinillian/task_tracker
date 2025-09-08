@@ -1,18 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/project.dart';
 import '../models/task.dart';
 import '../models/subtask.dart';
+import '../services/firestore_service.dart';
+import '../services/task_service.dart';
+import '../widgets/dialogs.dart';
+import '../utils/progress_utils.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final Project project;
-  final Function() onDeleteProject;
-  final Function(String, int, String) onAddProgressHistory;
+  final Function(Project) onProjectUpdated;
+  final Function(String, int, String) onAddProgressHistory; // ДОБАВИТЬ
 
   const ProjectDetailScreen({
     super.key,
     required this.project,
-    required this.onDeleteProject,
-    required this.onAddProgressHistory,
+    required this.onProjectUpdated,
+    required this.onAddProgressHistory, // ДОБАВИТЬ
   });
 
   @override
@@ -20,632 +25,305 @@ class ProjectDetailScreen extends StatefulWidget {
 }
 
 class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
-  final Map<int, bool> _showTaskInput = {};
-  final Map<String, bool> _showSubtaskInput = {};
-  final Map<String, TextEditingController> _taskNameControllers = {};
-  final Map<String, TextEditingController> _taskStepsControllers = {};
-  final Map<String, TextEditingController> _subtaskNameControllers = {};
-  final Map<String, TextEditingController> _subtaskStepsControllers = {};
+  final FirestoreService _firestoreService = FirestoreService();
 
-  TextEditingController _getTaskNameController(int taskIndex) {
-    final key = 't$taskIndex';
-    if (!_taskNameControllers.containsKey(key)) {
-      _taskNameControllers[key] = TextEditingController();
-      _taskStepsControllers[key] = TextEditingController();
-    }
-    return _taskNameControllers[key]!;
-  }
-
-  TextEditingController _getTaskStepsController(int taskIndex) {
-    final key = 't$taskIndex';
-    if (!_taskStepsControllers.containsKey(key)) {
-      _taskNameControllers[key] = TextEditingController();
-      _taskStepsControllers[key] = TextEditingController();
-    }
-    return _taskStepsControllers[key]!;
-  }
-
-  TextEditingController _getSubtaskNameController(int taskIndex, int subtaskIndex) {
-    final key = 't${taskIndex}s$subtaskIndex';
-    if (!_subtaskNameControllers.containsKey(key)) {
-      _subtaskNameControllers[key] = TextEditingController();
-      _subtaskStepsControllers[key] = TextEditingController();
-    }
-    return _subtaskNameControllers[key]!;
-  }
-
-  TextEditingController _getSubtaskStepsController(int taskIndex, int subtaskIndex) {
-    final key = 't${taskIndex}s$subtaskIndex';
-    if (!_subtaskStepsControllers.containsKey(key)) {
-      _subtaskNameControllers[key] = TextEditingController();
-      _subtaskStepsControllers[key] = TextEditingController();
-    }
-    return _subtaskStepsControllers[key]!;
-  }
-
-  // Добавим эти методы в класс _ProjectDetailScreenState
-  void _editProject() {
-    final controller = TextEditingController(text: widget.project.name);
-
-    showDialog(
+  void _addTask() async {
+    final name = await Dialogs.showTextInputDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Редактировать проект'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(hintText: 'Название проекта'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (controller.text.isNotEmpty) {
-                setState(() {
-                  widget.project.name = controller.text;
-                });
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Сохранить'),
-          ),
-        ],
-      ),
+      title: 'Новая задача',
+      initialValue: '',
     );
-  }
+    if (name != null && name.isNotEmpty) {
+      final steps = await Dialogs.showNumberInputDialog(
+        context: context,
+        title: 'Количество шагов для "$name"',
+        message: 'Введите общее количество шагов для задачи',
+      );
 
-  void _deleteProject() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Удалить проект'),
-        content: const Text('Вы уверены, что хотите удалить этот проект?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () {
-              widget.onDeleteProject(); // ← Вызов callback
-              Navigator.pop(context); // Закрыть диалог
-              Navigator.pop(context); // Вернуться к списку
-            },
-            child: const Text('Удалить', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _handlePopupAction(String value) {
-    switch (value) {
-      case 'archive':
-      // TODO: Реализовать архивацию
-        break;
-      case 'delete':
-        _deleteProject();
-        break;
-    }
-  }
-
-  void _addTaskProgress(int taskIndex) {
-    final task = widget.project.tasks[taskIndex];
-    final controller = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Прогресс: ${task.name}'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(hintText: 'Количество шагов'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () {
-              final steps = int.tryParse(controller.text) ?? 0;
-              if (steps > 0) {
-                setState(() {
-                  widget.onAddProgressHistory(task.name, steps, 'task');
-                  task.completedSteps += steps;
-                });
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Добавить'),
-          ),
-        ],
-      ),
-    );
-  }
-
-
-
-  // project_detail_screen.dart - обновим _addTask()
-  void _addTask() {
-    final nameController = TextEditingController();
-    final stepsController = TextEditingController(text: '1');
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Новая задача'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(hintText: 'Название задачи'),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: stepsController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(hintText: 'Количество шагов'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (nameController.text.isNotEmpty) {
-                final steps = int.tryParse(stepsController.text) ?? 1;
-                setState(() {
-                  widget.project.tasks.add(Task(
-                    name: nameController.text,
-                    totalSteps: steps,
-                    completedSteps: 0,
-                    subtasks: [],
-                  ));
-                });
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Добавить'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _addSubtask(int taskIndex) {
-    final nameController = TextEditingController();
-    final stepsController = TextEditingController(text: '1');
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Новая подзадача'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(hintText: 'Название подзадачи'),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: stepsController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(hintText: 'Количество шагов'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (nameController.text.isNotEmpty) {
-                final steps = int.tryParse(stepsController.text) ?? 1;
-                setState(() {
-                  widget.project.tasks[taskIndex].subtasks.add(Subtask(
-                    name: nameController.text,
-                    totalSteps: steps,
-                    completedSteps: 0,
-                  ));
-                });
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Добавить'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _editTask(int taskIndex) {
-    final task = widget.project.tasks[taskIndex];
-    final nameController = TextEditingController(text: task.name);
-    final stepsController = TextEditingController(text: task.totalSteps.toString());
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Редактировать задачу'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(hintText: 'Название задачи'),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: stepsController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(hintText: 'Общее количество шагов'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (nameController.text.isNotEmpty) {
-                final steps = int.tryParse(stepsController.text) ?? task.totalSteps;
-                setState(() {
-                  task.name = nameController.text;
-                  task.totalSteps = steps;
-                  // Сохраняем прогресс в пределах новых шагов
-                  task.completedSteps = task.completedSteps.clamp(0, steps);
-                });
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Сохранить'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _editSubtask(int taskIndex, int subtaskIndex) {
-    final subtask = widget.project.tasks[taskIndex].subtasks[subtaskIndex];
-    final nameController = TextEditingController(text: subtask.name);
-    final stepsController = TextEditingController(text: subtask.totalSteps.toString());
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Редактировать подзадачу'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(hintText: 'Название подзадачи'),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: stepsController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(hintText: 'Количество шагов'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (nameController.text.isNotEmpty) {
-                final steps = int.tryParse(stepsController.text) ?? subtask.totalSteps;
-                setState(() {
-                  subtask.name = nameController.text;
-                  subtask.totalSteps = steps;
-                  // Сохраняем прогресс в пределах новых шагов
-                  subtask.completedSteps = subtask.completedSteps.clamp(0, steps);
-                });
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Сохранить'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _updateProgress(int taskIndex, int subtaskIndex, int completedSteps) {
-    setState(() {
-      if (subtaskIndex >= 0) {
-        final subtask = widget.project.tasks[taskIndex].subtasks[subtaskIndex];
-        subtask.completedSteps = completedSteps.clamp(0, subtask.totalSteps);
-      } else {
-        final task = widget.project.tasks[taskIndex];
-        task.completedSteps = completedSteps.clamp(0, task.totalSteps);
+      if (steps != null && steps > 0) {
+        setState(() {
+          widget.project.tasks.add(TaskService.createTask(name, steps));
+        });
+        widget.onProjectUpdated(widget.project);
       }
-    });
+    }
   }
 
-  void _addSubtaskProgress(int taskIndex, int subtaskIndex) {
-    final subtask = widget.project.tasks[taskIndex].subtasks[subtaskIndex];
-    final controller = TextEditingController();
-
-    showDialog(
+  void _editTask(Task task) async {
+    final name = await Dialogs.showTextInputDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Прогресс: ${subtask.name}'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(hintText: 'Количество шагов'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () {
-              final steps = int.tryParse(controller.text) ?? 0;
-              if (steps > 0) {
-                setState(() {
-                  widget.onAddProgressHistory(subtask.name, steps, 'subtask');
-                  subtask.completedSteps += steps;
-
-                });
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Добавить'),
-          ),
-        ],
-      ),
+      title: 'Редактировать задачу',
+      initialValue: task.name,
     );
+
+    if (name != null && name.isNotEmpty) {
+      final steps = await Dialogs.showNumberInputDialog(
+        context: context,
+        title: 'Количество шагов для "$name"',
+        message: 'Текущее количество: ${task.totalSteps}',
+        initialValue: task.totalSteps.toString(),
+      );
+
+      if (steps != null && steps > 0) {
+        setState(() {
+          TaskService.updateTask(task, name, steps);
+        });
+        widget.onProjectUpdated(widget.project);
+      }
+    }
   }
 
-  void _deleteTask(int taskIndex) {
-    showDialog(
+  void _deleteTask(Task task) async {
+    final confirm = await Dialogs.showConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Удалить задачу'),
-        content: const Text('Вы уверены, что хотите удалить эту задачу?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                widget.project.tasks.removeAt(taskIndex);
-              });
-              Navigator.pop(context);
-            },
-            child: const Text('Удалить', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+      title: 'Удалить задачу',
+      message: 'Вы уверены, что хотите удалить "${task.name}"?',
     );
+
+    if (confirm) {
+      setState(() {
+        widget.project.tasks.remove(task);
+      });
+      widget.onProjectUpdated(widget.project);
+    }
   }
 
-  void _deleteSubtask(int taskIndex, int subtaskIndex) {
-    showDialog(
+  void _addSubtask(Task task) async {
+    final name = await Dialogs.showTextInputDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Удалить подзадачу'),
-        content: const Text('Вы уверены, что хотите удалить эту подзадачу?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                widget.project.tasks[taskIndex].subtasks.removeAt(subtaskIndex);
-              });
-              Navigator.pop(context);
-            },
-            child: const Text('Удалить', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+      title: 'Новая подзадача',
+      initialValue: '',
     );
+
+    if (name != null && name.isNotEmpty) {
+      final steps = await Dialogs.showNumberInputDialog(
+        context: context,
+        title: 'Количество шагов для "$name"',
+        message: 'Введите общее количество шагов для подзадачи',
+      );
+
+      if (steps != null && steps > 0) {
+        setState(() {
+          task.subtasks.add(TaskService.createSubtask(name, steps));
+        });
+        widget.onProjectUpdated(widget.project);
+      }
+    }
   }
 
-  // Добавьте эти методы ПЕРЕД _buildTaskList
-  Color _getProgressColor(double progress) {
-    if (progress >= 1.0) return Colors.green;
-    if (progress >= 0.7) return Colors.orange;
-    if (progress >= 0.3) return Colors.yellow;
-    return Colors.red;
-  }
-
-  Color _getSubtaskProgressColor(double progress) {
-    if (progress >= 1.0) return Colors.green;
-    if (progress >= 0.7) return Colors.lightGreen;
-    if (progress >= 0.4) return Colors.orange;
-    if (progress >= 0.1) return Colors.amber;
-    return Colors.red;
-  }
-
-  Widget _buildTaskList() {
-    return ListView.builder(
-      itemCount: widget.project.tasks.length,
-      itemBuilder: (context, taskIndex) {
-        final task = widget.project.tasks[taskIndex];
-        // Прогресс задачи
-        double taskProgress = task.totalSteps > 0
-            ? task.completedSteps / task.totalSteps
-            : 0;
-
-        return Card(
-          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        task.name,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.edit, size: 20),
-                      onPressed: () => _editTask(taskIndex),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.add),
-                      onPressed: () => _addSubtask(taskIndex),
-                    ),
-                  ],
-                ),
-
-                // Прогресс задачи
-                LinearProgressIndicator(
-                  value: taskProgress,
-                  backgroundColor: Colors.grey[300],
-                  color: _getProgressColor(taskProgress),
-                ),
-
-                const SizedBox(height: 8),
-
-                // Кнопка прогресса и статистика
-                Row(
-                  children: [
-                    Text('${task.completedSteps}/${task.totalSteps} шагов',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.add, size: 20),
-                      onPressed: () => _addTaskProgress(taskIndex),
-                    ),
-                  ],
-                ),
-
-                // Подзадачи
-                if (task.subtasks.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Подзадачи:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  ...task.subtasks.asMap().entries.map((entry) {
-                    final subtaskIndex = entry.key;
-                    final subtask = entry.value;
-                    final subtaskProgress = subtask.totalSteps > 0
-                        ? (subtask.completedSteps / subtask.totalSteps).toDouble()
-                        : 0.0;
-                    final progressColor = _getSubtaskProgressColor(subtaskProgress);
-
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: progressColor.withOpacity(0.2),
-                        foregroundColor: progressColor,
-                        child: Text(
-                          '${(subtaskProgress * 100).toInt()}%',
-                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      title: Text(subtask.name),
-                      subtitle: Text('${subtask.completedSteps}/${subtask.totalSteps} шагов'),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit, size: 18),
-                            onPressed: () => _editSubtask(taskIndex, subtaskIndex),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.add, size: 18),
-                            onPressed: () => _addSubtaskProgress(taskIndex, subtaskIndex),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
+  void _addTaskProgress(Task task) async {
+    final steps = await Dialogs.showNumberInputDialog(
+      context: context,
+      title: 'Добавить прогресс: ${task.name}',
+      message: 'Текущий прогресс: ${task.completedSteps}/${task.totalSteps}',
     );
+
+    if (steps != null && steps > 0) {
+      setState(() {
+        task.completedSteps = (task.completedSteps + steps).clamp(0, task.totalSteps);
+      });
+      widget.onProjectUpdated(widget.project);
+
+      // Передаем данные через callback
+      widget.onAddProgressHistory(task.name, steps, 'task');
+    }
   }
 
+  void _addSubtaskProgress(Subtask subtask, Task task) async {
+    final steps = await Dialogs.showNumberInputDialog(
+      context: context,
+      title: 'Добавить прогресс: ${subtask.name}',
+      message: 'Текущий прогресс: ${subtask.completedSteps}/${subtask.totalSteps}',
+    );
+
+    if (steps != null && steps > 0) {
+      setState(() {
+        subtask.completedSteps = (subtask.completedSteps + steps).clamp(0, subtask.totalSteps);
+      });
+      widget.onProjectUpdated(widget.project);
+
+      // Передаем данные через callback
+      widget.onAddProgressHistory(subtask.name, steps, 'subtask');
+    }
+  }
+
+  void _editSubtask(Subtask subtask, Task task) async {
+    final name = await Dialogs.showTextInputDialog(
+      context: context,
+      title: 'Редактировать подзадачу',
+      initialValue: subtask.name,
+    );
+
+    if (name != null && name.isNotEmpty) {
+      final steps = await Dialogs.showNumberInputDialog(
+        context: context,
+        title: 'Количество шагов для "$name"',
+        message: 'Текущее количество: ${subtask.totalSteps}',
+        initialValue: subtask.totalSteps.toString(),
+      );
+
+      if (steps != null && steps > 0) {
+        setState(() {
+          TaskService.updateSubtask(subtask, name, steps);
+        });
+        widget.onProjectUpdated(widget.project);
+      }
+    }
+  }
+
+  void _deleteSubtask(Subtask subtask, Task task) async {
+    final confirm = await Dialogs.showConfirmDialog(
+      context: context,
+      title: 'Удалить подзадачу',
+      message: 'Вы уверены, что хотите удалить "${subtask.name}"?',
+    );
+
+    if (confirm) {
+      setState(() {
+        task.subtasks.remove(subtask);
+      });
+      widget.onProjectUpdated(widget.project);
+    }
+  }
+
+  void _addProgressHistory(String itemName, int steps, String itemType) {
+    if (widget.project.name.isEmpty) return;
+
+    final now = DateTime.now();
+    final historyEntry = {
+      'date': Timestamp.fromDate(now),
+      'itemName': itemName,
+      'stepsAdded': steps,
+      'itemType': itemType,
+    };
+
+    // Нужно передать это обратно в главный экран для сохранения
+    // Пока просто сохраним локально для теста
+    print('Added to history: $historyEntry');
+
+    // Для теста: обновим UI чтобы видеть изменения
+    setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
-    final totalSteps = widget.project.tasks.fold<int>(0, (sum, task) => sum + task.totalSteps);
-    final completedSteps = widget.project.tasks.fold<int>(0, (sum, task) => sum + task.completedSteps);
-    final progress = totalSteps > 0 ? completedSteps / totalSteps : 0;
-
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(widget.project.name),
-            Text(
-              '${(progress * 100).toStringAsFixed(0)}% • $completedSteps/$totalSteps шагов',
-              style: const TextStyle(fontSize: 12),
-            ),
-          ],
-        ),
+        title: Text(widget.project.name),
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),
-            onPressed: _editProject,
-          ),
-          PopupMenuButton(
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'archive',
-                child: Text('В архив'),
-              ),
-              const PopupMenuItem(
-                value: 'delete',
-                child: Text('Удалить', style: TextStyle(color: Colors.red)),
-              ),
-            ],
-            onSelected: _handlePopupAction,
+            onPressed: () async {
+              final newName = await Dialogs.showTextInputDialog(
+                context: context,
+                title: 'Редактировать проект',
+                initialValue: widget.project.name,
+              );
+
+              if (newName != null && newName.isNotEmpty) {
+                setState(() {
+                  widget.project.name = newName;
+                });
+                widget.onProjectUpdated(widget.project);
+              }
+            },
           ),
         ],
+      ),
+      body: ListView.builder(
+        itemCount: widget.project.tasks.length,
+        itemBuilder: (context, index) {
+          final task = widget.project.tasks[index];
+          final taskProgress = ProgressUtils.calculateProgress(task.completedSteps, task.totalSteps);
+
+          return Card(
+            color: ProgressUtils.getTaskColor(taskProgress),
+            child: ExpansionTile(
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${task.name} (${task.completedSteps}/${task.totalSteps})'),
+                  const SizedBox(height: 4),
+                  ProgressUtils.buildAnimatedProgressBar(taskProgress),
+                ],
+              ),
+              children: [
+                // Кнопки управления задачей
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.add),
+                        onPressed: () => _addTaskProgress(task),
+                        tooltip: 'Добавить прогресс',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.edit),
+                        onPressed: () => _editTask(task),
+                        tooltip: 'Редактировать',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () => _deleteTask(task),
+                        tooltip: 'Удалить',
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Подзадачи
+                ...task.subtasks.map((subtask) {
+                  final subtaskProgress = ProgressUtils.calculateProgress(
+                      subtask.completedSteps, subtask.totalSteps);
+
+                  return ListTile(
+                    title: Text(subtask.name),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${subtask.completedSteps}/${subtask.totalSteps}'),
+                        ProgressUtils.buildAnimatedProgressBar(subtaskProgress),
+                      ],
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.add, size: 20),
+                          onPressed: () => _addSubtaskProgress(subtask, task),
+                          tooltip: 'Добавить прогресс',
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.edit, size: 20),
+                          onPressed: () => _editSubtask(subtask, task),
+                          tooltip: 'Редактировать',
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, size: 20, color: Colors.red),
+                          onPressed: () => _deleteSubtask(subtask, task),
+                          tooltip: 'Удалить',
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+
+                // Кнопка добавления подзадачи
+                ListTile(
+                  leading: const Icon(Icons.add),
+                  title: const Text('Добавить подзадачу'),
+                  onTap: () => _addSubtask(task),
+                ),
+              ],
+            ),
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _addTask,
         child: const Icon(Icons.add),
       ),
-      body: widget.project.tasks.isEmpty
-          ? const Center(
-        child: Text(
-          'Добавьте первую задачу',
-          style: TextStyle(fontSize: 18, color: Colors.grey),
-        ),
-      )
-          : _buildTaskList(),
     );
   }
 }
-

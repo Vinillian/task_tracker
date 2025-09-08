@@ -1,11 +1,10 @@
-
 import 'project.dart';
 import 'progress_history.dart';
 
 class User {
   String name;
   List<Project> projects;
-  List<ProgressHistory> progressHistory;
+  List<dynamic> progressHistory;
 
   User({
     required this.name,
@@ -13,23 +12,32 @@ class User {
     required this.progressHistory,
   });
 
-  Map<String, dynamic> toJson() => {
-    'name': name,
-    'projects': projects.map((p) => p.toJson()).toList(),
-    'progressHistory': progressHistory.map((h) => h.toJson()).toList(),
-  };
+  Map<String, dynamic> toFirestore() {
+    // Принудительная миграция всех данных в Map
+    final migratedHistory = progressHistory.map((item) {
+      if (item is ProgressHistory) {
+        print('Мигрируем ProgressHistory в Map');
+        return item.toFirestore();
+      }
+      return item;
+    }).toList();
 
-  factory User.fromJson(Map<String, dynamic> json) {
+    return {
+      'name': name,
+      'projects': projects.map((p) => p.toFirestore()).toList(),
+      'progressHistory': migratedHistory,
+    };
+  }
+
+  static User fromFirestore(Map<String, dynamic> data) {
     return User(
-      name: json['name'],
-      projects: (json['projects'] as List)
-          .map((p) => Project.fromJson(p))
-          .toList(),
-      progressHistory:
-      (json['progressHistory'] as List?)
-          ?.map((h) => ProgressHistory.fromJson(h))
-          .toList() ??
-          [],
+      name: data['name'] ?? '',
+      projects: (data['projects'] as List<dynamic>?)
+          ?.map((p) => Project.fromFirestore(Map<String, dynamic>.from(p)))
+          .toList() ?? [],
+      progressHistory: data['progressHistory'] ?? [],
     );
   }
+
+  static User empty() => User(name: '', projects: [], progressHistory: []);
 }

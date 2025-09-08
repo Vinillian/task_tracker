@@ -1,375 +1,330 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import '../models/user.dart';
+import '../services/firestore_service.dart';
 
 class GitHubCalendar extends StatelessWidget {
-  final User? currentUser;
+  final String? userName;
+  const GitHubCalendar({super.key, required this.userName});
 
-  // Константы ширины/шага колонки
   static const double _cellSize = 12;
-  static const double _cellMargin = 1;
+  static const double _cellMargin = 2;
   static const double _columnWidth = _cellSize + _cellMargin * 2;
 
-  const GitHubCalendar({super.key, required this.currentUser});
-
-  Map<DateTime, int> _getDailyContributions() {
-    final contributions = <DateTime, int>{};
-    final now = DateTime.now();
-    final startDate = DateTime(now.year - 1, now.month, now.day);
-
-    // Заполняем все даты нулями
-    var currentDate = startDate;
-    while (currentDate.isBefore(now) || currentDate.isAtSameMomentAs(now)) {
-      final date = DateTime(currentDate.year, currentDate.month, currentDate.day);
-      contributions[date] = 0;
-      currentDate = currentDate.add(const Duration(days: 1));
-    }
-
-    if (currentUser != null) {
-      print('=== CALENDAR DEBUG ===');
-      print('User: ${currentUser!.name}');
-      print('Progress history items: ${currentUser!.progressHistory.length}');
-
-      for (final history in currentUser!.progressHistory) {
-        // Нормализуем дату истории (убираем время)
-        final historyDate = DateTime(history.date.year, history.date.month, history.date.day);
-        print('History item: $historyDate - ${history.stepsAdded} steps - ${history.itemName}');
-
-        if (contributions.containsKey(historyDate)) {
-          contributions[historyDate] = contributions[historyDate]! + history.stepsAdded;
-          print('✓ ADDED to calendar: $historyDate - ${history.stepsAdded} steps');
-        } else {
-          print('✗ SKIPPED (out of range): $historyDate');
-        }
-      }
-
-      print('Calendar date range: ${contributions.keys.first} to ${contributions.keys.last}');
-      print('=====================');
-    }
-
-    return contributions;
+  Stream<User?> _userStream(BuildContext context) {
+    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+    return firestoreService.usersStream().map((users) {
+      return users.firstWhere((user) => user.name == userName, orElse: () => User.empty());
+    });
   }
 
-  Color _getContributionColor(int steps) {
-    if (steps == 0) return const Color(0xFFEBEDF0);
-    if (steps < 5) return const Color(0xFF9BE9A8);
-    if (steps < 10) return const Color(0xFF40C463);
-    if (steps < 20) return const Color(0xFF30A14E);
+  Map<DateTime, int> _buildContributions(List<dynamic> progressHistory) {
+    final now = DateTime.now();
+    final start = DateTime(now.year - 1, now.month, now.day);
+    final map = <DateTime, int>{};
+
+    for (var d = start; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+      map[DateTime(d.year, d.month, d.day)] = 0;
+    }
+
+    if (progressHistory.isEmpty) return map;
+
+    for (final historyData in progressHistory) {
+      try {
+        Map<String, dynamic> historyMap;
+        if (historyData is Map<String, dynamic>) {
+          historyMap = historyData;
+        } else {
+          continue;
+        }
+
+        final dynamic dateData = historyMap['date'];
+        final dynamic stepsData = historyMap['stepsAdded'];
+
+        DateTime date;
+        int steps = 0;
+
+        if (stepsData is int) {
+          steps = stepsData;
+        } else if (stepsData is String) {
+          steps = int.tryParse(stepsData) ?? 0;
+        }
+
+        if (dateData is Timestamp) {
+          date = dateData.toDate();
+        } else if (dateData is String) {
+          date = DateTime.parse(dateData);
+        } else {
+          continue;
+        }
+
+        final normalizedDate = DateTime(date.year, date.month, date.day);
+        if (map.containsKey(normalizedDate)) {
+          map[normalizedDate] = map[normalizedDate]! + steps;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+    return map;
+  }
+
+  Color _colorForCount(int count) {
+    if (count == 0) return const Color(0xFFEBEDF0);
+    if (count < 5) return const Color(0xFF9BE9A8);
+    if (count < 10) return const Color(0xFF40C463);
+    if (count < 20) return const Color(0xFF30A14E);
     return const Color(0xFF216E39);
   }
 
-  List<List<DateTime>> _groupWeeksByColumns(Map<DateTime, int> contributions) {
-    final allDates = contributions.keys.toList()..sort();
-    if (allDates.isEmpty) return [];
+  List<List<DateTime>> _weeks(Map<DateTime, int> contributions) {
+    final dates = contributions.keys.toList()..sort();
+    if (dates.isEmpty) return [];
 
-    final weeks = <List<DateTime>>[];
-    DateTime currentDate = allDates.first;
-    while (currentDate.weekday != DateTime.monday) {
-      currentDate = currentDate.subtract(const Duration(days: 1));
+    var cur = dates.first;
+    while (cur.weekday != DateTime.monday) {
+      cur = cur.subtract(const Duration(days: 1));
     }
 
-    final lastDate = allDates.last;
-    while (currentDate.isBefore(lastDate) || currentDate.isAtSameMomentAs(lastDate)) {
+    final last = dates.last;
+    final weeks = <List<DateTime>>[];
+
+    while (!cur.isAfter(last)) {
       final week = <DateTime>[];
       for (int i = 0; i < 7; i++) {
-        if (currentDate.isAfter(lastDate)) {
-          week.add(DateTime(0));
-        } else {
-          week.add(currentDate);
-          currentDate = currentDate.add(const Duration(days: 1));
-        }
+        week.add(cur);
+        cur = cur.add(const Duration(days: 1));
       }
       weeks.add(week);
-      if (currentDate.isAfter(lastDate)) break;
     }
-
     return weeks;
   }
 
-  String _getShortMonthName(int month) {
-    switch (month) {
-      case 1:
-        return 'Янв';
-      case 2:
-        return 'Фев';
-      case 3:
-        return 'Мар';
-      case 4:
-        return 'Апр';
-      case 5:
-        return 'Май';
-      case 6:
-        return 'Июн';
-      case 7:
-        return 'Июл';
-      case 8:
-        return 'Авг';
-      case 9:
-        return 'Сен';
-      case 10:
-        return 'Окт';
-      case 11:
-        return 'Ноя';
-      case 12:
-        return 'Дек';
-      default:
-        return '';
-    }
-  }
-
-  Widget _buildWeekDayLabel(String day) {
-    return SizedBox(
-      width: 20,
-      child: Text(
-        day,
-        style: const TextStyle(fontSize: 9, color: Colors.black54),
-        textAlign: TextAlign.center,
-      ),
-    );
-  }
-
-  Widget _buildMonthHeaders(List<List<DateTime>> weeks) {
-    if (weeks.isEmpty) return const SizedBox();
-
-    final monthHeaders = <Widget>[];
+  Widget _monthHeaders(List<List<DateTime>> weeks) {
+    if (weeks.isEmpty) return const SizedBox.shrink();
+    final headers = <Widget>[];
     String? currentMonth;
-    int currentMonthWeeks = 0;
+    double width = 0;
 
-    String? monthOfWeekStart(DateTime d) {
-      if (d.year <= 1) return null;
-      return _getShortMonthName(d.month);
-    }
-
-    for (int i = 0; i < weeks.length; i++) {
-      final firstValid = weeks[i].firstWhere((d) => d.year > 1, orElse: () => DateTime(0));
-      final weekMonth = firstValid.year > 1 ? monthOfWeekStart(firstValid)! : null;
-
-      if (weekMonth == null) {
-        if (currentMonth != null) currentMonthWeeks++;
+    for (final week in weeks) {
+      final first = week.first;
+      final label = (first.year <= 1) ? null : DateFormat.MMM().format(first);
+      if (label == null) {
+        width += _columnWidth;
         continue;
       }
-
-      if (weekMonth != currentMonth) {
-        if (currentMonth != null && currentMonthWeeks > 0) {
-          monthHeaders.add(
-            Container(
-              width: _columnWidth * currentMonthWeeks,
-              alignment: Alignment.center,
-              child: Text(currentMonth, style: const TextStyle(fontSize: 10, color: Colors.black54)),
-            ),
-          );
+      if (label != currentMonth) {
+        if (currentMonth != null) {
+          headers.add(SizedBox(
+              width: width,
+              child: Center(child: Text(currentMonth!, style: const TextStyle(fontSize: 10, color: Colors.black54)))
+          ));
         }
-        currentMonth = weekMonth;
-        currentMonthWeeks = 1;
+        currentMonth = label;
+        width = _columnWidth;
       } else {
-        currentMonthWeeks++;
+        width += _columnWidth;
       }
     }
-
-    if (currentMonth != null && currentMonthWeeks > 0) {
-      monthHeaders.add(
-        Container(
-          width: _columnWidth * currentMonthWeeks,
-          alignment: Alignment.center,
-          child: Text(currentMonth, style: const TextStyle(fontSize: 10, color: Colors.black54)),
-        ),
-      );
+    if (currentMonth != null) {
+      headers.add(SizedBox(
+          width: width,
+          child: Center(child: Text(currentMonth, style: const TextStyle(fontSize: 10, color: Colors.black54)))
+      ));
     }
-
-    return Row(children: monthHeaders);
+    return Row(children: headers);
   }
 
-  Widget _buildCalendarGridWithRows(Map<DateTime, int> contributions) {
-    final weeks = _groupWeeksByColumns(contributions);
-    if (weeks.isEmpty) {
-      return const Center(
-        child: Text('Нет данных для отображения', style: TextStyle(color: Colors.grey)),
-      );
+  double _calculateScrollPosition(List<List<DateTime>> weeks) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    for (int i = 0; i < weeks.length; i++) {
+      for (int j = 0; j < weeks[i].length; j++) {
+        final date = weeks[i][j];
+        if (date.year == today.year && date.month == today.month && date.day == today.day) {
+          return (i * _columnWidth) - 100;
+        }
+      }
     }
-
-    final scrollController = ScrollController(initialScrollOffset: 1000);
-
-    return Scrollbar(
-      controller: scrollController,
-      thumbVisibility: true,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        controller: scrollController,
-        reverse: true,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Метки дней недели СЛЕВА от календаря
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                // Пустое место для заголовка месяцев
-                const SizedBox(height: 28, width: 30),
-                // Понедельник (1 строка)
-                SizedBox(
-                  height: _cellSize + _cellMargin * 2,
-                  child: const Text('Пн',
-                      style: TextStyle(fontSize: 9, color: Colors.black54)),
-                ),
-                // Вторник (2 строка) - ДОБАВИЛИ
-                SizedBox(
-                  height: _cellSize + _cellMargin * 2,
-                  child: const Text('Вт',
-                      style: TextStyle(fontSize: 9, color: Colors.black54)),
-                ),
-                // Среда (3 строка)
-                SizedBox(
-                  height: _cellSize + _cellMargin * 2,
-                  child: const Text('Ср',
-                      style: TextStyle(fontSize: 9, color: Colors.black54)),
-                ),
-                // Четверг (4 строка) - ДОБАВИЛИ
-                SizedBox(
-                  height: _cellSize + _cellMargin * 2,
-                  child: const Text('Чт',
-                      style: TextStyle(fontSize: 9, color: Colors.black54)),
-                ),
-                // Пятница (5 строка)
-                SizedBox(
-                  height: _cellSize + _cellMargin * 2,
-                  child: const Text('Пт',
-                      style: TextStyle(fontSize: 9, color: Colors.black54)),
-                ),
-                // Суббота (6 строка) - ДОБАВИЛИ
-                SizedBox(
-                  height: _cellSize + _cellMargin * 2,
-                  child: const Text('Сб',
-                      style: TextStyle(fontSize: 9, color: Colors.black54)),
-                ),
-                // Воскресенье (7 строка) - ДОБАВИЛИ
-                SizedBox(
-                  height: _cellSize + _cellMargin * 2,
-                  child: const Text('Вс',
-                      style: TextStyle(fontSize: 9, color: Colors.black54)),
-                ),
-              ],
-            ),
-            const SizedBox(width: 8),
-            // Основная часть (месяцы + сетка)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildMonthHeaders(weeks),
-                const SizedBox(height: 4),
-                // Сетка календаря
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: weeks.map((week) {
-                    return SizedBox(
-                      width: _columnWidth,
-                      child: Column(
-                        children: List.generate(7, (day) {
-                          if (day < week.length && week[day].year > 1) {
-                            final date = week[day];
-                            final dayContributions = contributions[date] ?? 0;
-                            final color = _getContributionColor(dayContributions);
-
-                            return Container(
-                              width: _cellSize,
-                              height: _cellSize,
-                              margin: const EdgeInsets.all(_cellMargin),
-                              decoration: BoxDecoration(
-                                color: color,
-                                borderRadius: BorderRadius.circular(2),
-                                border: Border.all(color: const Color(0xFF1B1F230F), width: 0.5),
-                              ),
-                              child: Tooltip(
-                                message: '${DateFormat('dd MMMM yyyy').format(date)}\n$dayContributions шагов',
-                                child: const SizedBox.expand(),
-                              ),
-                            );
-                          } else {
-                            return Container(
-                              width: _cellSize,
-                              height: _cellSize,
-                              margin: const EdgeInsets.all(_cellMargin),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEBEDF0),
-                                borderRadius: BorderRadius.circular(2),
-                                border: Border.all(color: const Color(0xFF1B1F230F), width: 0.5),
-                              ),
-                            );
-                          }
-                        }),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
+    return weeks.length * _columnWidth - 300;
   }
 
-  Widget _buildLegend() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Text('Меньше', style: TextStyle(fontSize: 10, color: Colors.black54)),
-        const SizedBox(width: 4),
-        _buildLegendItem(const Color(0xFF9BE9A8)),
-        const SizedBox(width: 2),
-        _buildLegendItem(const Color(0xFF40C463)),
-        const SizedBox(width: 2),
-        _buildLegendItem(const Color(0xFF30A14E)),
-        const SizedBox(width: 2),
-        _buildLegendItem(const Color(0xFF216E39)),
-        const SizedBox(width: 4),
-        const Text('Больше', style: TextStyle(fontSize: 10, color: Colors.black54)),
-      ],
-    );
+  bool _isToday(DateTime date) {
+    final now = DateTime.now();
+    return date.year == now.year && date.month == now.month && date.day == now.day;
   }
 
-  Widget _buildLegendItem(Color color) {
+  Widget _buildTodayStats(Map<DateTime, int> contributions) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final todayContributions = contributions[today] ?? 0;
+
     return Container(
-      width: 10,
-      height: 10,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(2),
-        border: Border.all(color: const Color(0xFF1B1F230F), width: 0.5),
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('Сегодня: ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey[700])),
+          Text('$todayContributions шагов', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _colorForCount(todayContributions))),
+          if (todayContributions > 0) ...[
+            const SizedBox(width: 8),
+            Icon(Icons.check_circle, color: _colorForCount(todayContributions), size: 16),
+          ],
+        ],
       ),
     );
   }
+
+  Widget _legendBox(Color color) => Container(
+      width: 12, height: 12, margin: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2), border: Border.all(color: const Color(0x11000000)))
+  );
 
   @override
   Widget build(BuildContext context) {
-    final contributions = _getDailyContributions();
+    return StreamBuilder<User?>(
+      stream: _userStream(context),
+      builder: (context, snapshot) {
+        // ПРОСТАЯ ПРОВЕРКА БЕЗ ПЕРЕМЕННОЙ ↓
+        if (snapshot.hasData && snapshot.data != null) {
+          _checkDataFormat(snapshot.data!);
+        }
 
-    // DEBUG: посмотрим что собирается
-    print('=== CALENDAR DEBUG ===');
-    print('User: ${currentUser?.name}');
-    print('Progress history: ${currentUser?.progressHistory.length} items');
-    contributions.forEach((date, steps) {
-      if (steps > 0) print('$date: $steps steps');
-    });
-    print('=====================');
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-    return Card(
-      margin: const EdgeInsets.all(16),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Календарь активности',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        final user = snapshot.data;
+        if (user == null || user.name.isEmpty) {
+          return const Center(child: Text('Пользователь не найден'));
+        }
+
+        final contributions = _buildContributions(user.progressHistory);
+        final weeks = _weeks(contributions);
+        final scrollPosition = _calculateScrollPosition(weeks);
+        final scrollController = ScrollController(initialScrollOffset: scrollPosition);
+
+        return Card(
+          margin: const EdgeInsets.all(12),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                const SizedBox(height: 4),
+                const Text('Календарь активности', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+
+                if (weeks.isEmpty)
+                  const Text('Нет данных для отображения', style: TextStyle(color: Colors.grey))
+                else
+                  Scrollbar(
+                    controller: scrollController,
+                    thumbVisibility: true,
+                    thickness: 6,
+                    radius: const Radius.circular(3),
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Column(
+                            children: [
+                              const SizedBox(height: 18),
+                              for (final day in ['Пн','','Ср','','Пт','','Вс'])
+                                SizedBox(
+                                    height: _cellSize + _cellMargin * 2,
+                                    width: 24,
+                                    child: Center(child: Text(day, style: const TextStyle(fontSize: 9, color: Colors.black54)))
+                                ),
+                            ],
+                          ),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _monthHeaders(weeks),
+                              const SizedBox(height: 4),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: weeks.map((week) {
+                                  return SizedBox(
+                                    width: _columnWidth,
+                                    child: Column(
+                                      children: List.generate(7, (i) {
+                                        if (i >= week.length) return const SizedBox();
+                                        final date = week[i];
+                                        final count = contributions[DateTime(date.year, date.month, date.day)] ?? 0;
+                                        final color = _colorForCount(count);
+                                        final isToday = _isToday(date);
+
+                                        return Container(
+                                          width: _cellSize, height: _cellSize, margin: const EdgeInsets.all(_cellMargin),
+                                          decoration: BoxDecoration(
+                                            color: color, borderRadius: BorderRadius.circular(2),
+                                            border: Border.all(color: isToday ? Colors.blue.withOpacity(0.8) : const Color(0x11000000), width: isToday ? 1.5 : 1),
+                                          ),
+                                          child: Tooltip(
+                                            message: '${DateFormat('dd MMM yyyy').format(date)}\n$count шагов${isToday ? ' (сегодня)' : ''}',
+                                            child: const SizedBox.expand(),
+                                          ),
+                                        );
+                                      }),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                const SizedBox(height: 12),
+                _buildTodayStats(contributions),
+                const SizedBox(height: 8),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('Меньше', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                    const SizedBox(width: 8),
+                    _legendBox(const Color(0xFF9BE9A8)),
+                    const SizedBox(width: 4),
+                    _legendBox(const Color(0xFF40C463)),
+                    const SizedBox(width: 4),
+                    _legendBox(const Color(0xFF30A14E)),
+                    const SizedBox(width: 4),
+                    _legendBox(const Color(0xFF216E39)),
+                    const SizedBox(width: 8),
+                    const Text('Больше', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            _buildCalendarGridWithRows(contributions),
-            const SizedBox(height: 16),
-            _buildLegend(),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
+  void _checkDataFormat(User user) {
+    print('=== ПРОВЕРКА ФОРМАТА ДАННЫХ ===');
+    print('Пользователь: ${user.name}');
+    print('Записей в истории: ${user.progressHistory.length}');
+
+    for (int i = 0; i < user.progressHistory.length; i++) {
+      final item = user.progressHistory[i];
+      print('Элемент $i тип: ${item.runtimeType}');
+    }
+    print('================================');
+  }
+
 }

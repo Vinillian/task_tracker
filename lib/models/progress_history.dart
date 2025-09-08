@@ -1,4 +1,4 @@
-
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ProgressHistory {
   final DateTime date;
@@ -20,12 +20,33 @@ class ProgressHistory {
     'itemType': itemType,
   };
 
-  factory ProgressHistory.fromJson(Map<String, dynamic> json) {
+  Map<String, dynamic> toFirestore() => {
+    'date': Timestamp.fromDate(date),
+    'itemName': itemName,
+    'stepsAdded': stepsAdded,
+    'itemType': itemType,
+  };
+
+  factory ProgressHistory.fromFirestore(Map<String, dynamic> data) {
+    final dynamic rawDate = data['date'];
+    final date = rawDate is Timestamp
+        ? rawDate.toDate()
+        : rawDate is String
+        ? DateTime.parse(rawDate)
+        : DateTime.now();
+
     return ProgressHistory(
-      date: DateTime.parse(json['date']),
-      itemName: json['itemName'],
-      stepsAdded: json['stepsAdded'],
-      itemType: json['itemType'],
+      date: date,
+      itemName: data['itemName'] ?? '',
+      stepsAdded: data['stepsAdded'] ?? 0,
+      itemType: data['itemType'] ?? '',
     );
   }
+
+  factory ProgressHistory.fromJson(Map<String, dynamic> json) => ProgressHistory(
+    date: DateTime.parse(json['date']),
+    itemName: json['itemName'],
+    stepsAdded: json['stepsAdded'],
+    itemType: json['itemType'],
+  );
 }
