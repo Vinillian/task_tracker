@@ -4,20 +4,25 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../models/app_user.dart';
 import '../services/firestore_service.dart';
+import '../services/auth_service.dart'; // Добавьте импорт
 
 class GitHubCalendar extends StatelessWidget {
-  final String? userName;
-  const GitHubCalendar({super.key, required this.userName});
+  const GitHubCalendar({super.key});
 
   static const double _cellSize = 12;
   static const double _cellMargin = 2;
   static const double _columnWidth = _cellSize + _cellMargin * 2;
 
   Stream<AppUser?> _userStream(BuildContext context) {
+    final authService = Provider.of<AuthService>(context, listen: false);
     final firestoreService = Provider.of<FirestoreService>(context, listen: false);
-    return firestoreService.usersStream().map((users) {
-      return users.firstWhere((user) => user.name == userName, orElse: () => AppUser.empty());
-    });
+
+    final currentUid = authService.currentUser?.uid;
+    if (currentUid == null) {
+      return Stream.value(null);
+    }
+
+    return firestoreService.userStream(currentUid);
   }
 
   Map<DateTime, int> _buildContributions(List<dynamic> progressHistory) {
@@ -201,7 +206,11 @@ class GitHubCalendar extends StatelessWidget {
         }
 
         final user = snapshot.data;
-        if (user == null || user.name.isEmpty) {
+        if (user == null) {
+          return const Center(child: Text('Данные пользователя загружаются...'));
+        }
+
+        if (user.name.isEmpty) {
           return const Center(child: Text('Пользователь не найден'));
         }
 
