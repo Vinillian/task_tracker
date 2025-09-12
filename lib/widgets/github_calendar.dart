@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import '../models/user.dart';
+import '../models/app_user.dart';
 import '../services/firestore_service.dart';
 
 class GitHubCalendar extends StatelessWidget {
@@ -13,10 +13,10 @@ class GitHubCalendar extends StatelessWidget {
   static const double _cellMargin = 2;
   static const double _columnWidth = _cellSize + _cellMargin * 2;
 
-  Stream<User?> _userStream(BuildContext context) {
+  Stream<AppUser?> _userStream(BuildContext context) {
     final firestoreService = Provider.of<FirestoreService>(context, listen: false);
     return firestoreService.usersStream().map((users) {
-      return users.firstWhere((user) => user.name == userName, orElse: () => User.empty());
+      return users.firstWhere((user) => user.name == userName, orElse: () => AppUser.empty());
     });
   }
 
@@ -189,10 +189,9 @@ class GitHubCalendar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
+    return StreamBuilder<AppUser?>(
       stream: _userStream(context),
       builder: (context, snapshot) {
-        // ПРОСТАЯ ПРОВЕРКА БЕЗ ПЕРЕМЕННОЙ ↓
         if (snapshot.hasData && snapshot.data != null) {
           _checkDataFormat(snapshot.data!);
         }
@@ -315,7 +314,7 @@ class GitHubCalendar extends StatelessWidget {
       },
     );
   }
-  void _checkDataFormat(User user) {
+  void _checkDataFormat(AppUser user) {
     print('=== ПРОВЕРКА ФОРМАТА ДАННЫХ ===');
     print('Пользователь: ${user.name}');
     print('Записей в истории: ${user.progressHistory.length}');
@@ -326,5 +325,4 @@ class GitHubCalendar extends StatelessWidget {
     }
     print('================================');
   }
-
 }

@@ -1,19 +1,18 @@
 import 'project.dart';
 import 'progress_history.dart';
 
-class User {
+class AppUser {
   String name;
   List<Project> projects;
   List<dynamic> progressHistory;
 
-  User({
+  AppUser({
     required this.name,
     required this.projects,
     required this.progressHistory,
   });
 
   Map<String, dynamic> toFirestore() {
-    // Принудительная миграция всех данных в Map
     final migratedHistory = progressHistory.map((item) {
       if (item is ProgressHistory) {
         print('Мигрируем ProgressHistory в Map');
@@ -29,8 +28,8 @@ class User {
     };
   }
 
-  static User fromFirestore(Map<String, dynamic> data) {
-    return User(
+  static AppUser fromFirestore(Map<String, dynamic> data) {
+    return AppUser(
       name: data['name'] ?? '',
       projects: (data['projects'] as List<dynamic>?)
           ?.map((p) => Project.fromFirestore(Map<String, dynamic>.from(p)))
@@ -39,5 +38,5 @@ class User {
     );
   }
 
-  static User empty() => User(name: '', projects: [], progressHistory: []);
+  static AppUser empty() => AppUser(name: '', projects: [], progressHistory: []);
 }

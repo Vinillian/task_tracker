@@ -1,8 +1,8 @@
-import '../models/user.dart';
+import '../models/app_user.dart';
 import '../services/firestore_service.dart';
 
 class DataMigration {
-  static Future<void> migrateUserData(User user, FirestoreService service) async {
+  static Future<void> migrateUserData(AppUser user, FirestoreService service, String uid) async {
     bool needsMigration = false;
 
     // Проверяем нужна ли миграция
@@ -21,7 +21,7 @@ class DataMigration {
       print('Миграция данных пользователя ${user.name}...');
 
       // Просто сохраняем пользователя - toFirestore() сделает миграцию
-      await service.saveUser(user);
+      await service.saveUser(user, uid);
       print('Миграция завершена!');
     }
   }

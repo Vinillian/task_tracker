@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import '../models/user.dart';
+import 'package:provider/provider.dart';
+import '../services/auth_service.dart';
+import '../services/firestore_service.dart';
+import '../models/app_user.dart';
 import '../models/project.dart';
-import '../models/task.dart';
-import '../models/subtask.dart';
 import '../models/progress_history.dart';
 import '../widgets/statistics_widgets.dart';
 import 'project_list_screen.dart';
-import '../services/firestore_service.dart';
 import 'drawer_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class TaskTrackerScreen extends StatefulWidget {
   const TaskTrackerScreen({super.key});
@@ -19,38 +18,42 @@ class TaskTrackerScreen extends StatefulWidget {
 
 class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     with SingleTickerProviderStateMixin {
-  List<User> users = [];
-  User? currentUser;
+  AppUser? currentUser;
   final FirestoreService _firestoreService = FirestoreService();
-
   late TabController _tabController;
-
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _setupRealTimeListener();
+    _loadUserData();
   }
 
-  void _setupRealTimeListener() {
-    _firestoreService.usersStream().listen((usersList) {
-      if (mounted) {
-        setState(() {
-          users = usersList;
-          if (users.isNotEmpty && currentUser == null) {
-            currentUser = users.first;
-            // Автоматически мигрируем при первом запуске
-            _saveData();
-          }
-        });
+  void _loadUserData() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final currentAuthUser = authService.currentUser;
+
+    if (currentAuthUser != null) {
+      try {
+        final userDoc = await _firestoreService.getUserDocument(currentAuthUser.uid);
+        if (userDoc.exists) {
+          final userData = userDoc.data() as Map<String, dynamic>;
+          setState(() {
+            currentUser = AppUser.fromFirestore(userData);
+          });
+        } else {
+          setState(() {
+            currentUser = AppUser(
+              name: currentAuthUser.email ?? 'User',
+              projects: [],
+              progressHistory: [],
+            );
+          });
+          await _firestoreService.saveUser(currentUser!, currentAuthUser.uid);
+        }
+      } catch (e) {
+        print('Ошибка загрузки пользователя: $e');
       }
-    });
-  }
-
-  Future<void> _saveData() async {
-    for (final user in users) {
-      await _firestoreService.saveUser(user);
     }
   }
 
@@ -58,10 +61,8 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     if (currentUser == null) return;
 
     final now = DateTime.now();
-
-    // Сохраняем как Map для совместимости с Firestore
     final history = {
-      'date': now.toIso8601String(), // Сохраняем как строку
+      'date': now.toIso8601String(),
       'itemName': itemName,
       'stepsAdded': stepsAdded,
       'itemType': itemType,
@@ -69,12 +70,14 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
 
     setState(() {
       currentUser!.progressHistory.add(history);
-      _saveData();
     });
 
-    print('Progress history added: $history');
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final currentAuthUser = authService.currentUser;
+    if (currentAuthUser != null) {
+      _firestoreService.saveUser(currentUser!, currentAuthUser.uid);
+    }
   }
-
 
   void _addProject() {
     if (currentUser == null) return;
@@ -102,8 +105,14 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
                       name: controller.text,
                       tasks: [],
                     ));
-                    _saveData();
                   });
+
+                  final authService = Provider.of<AuthService>(context, listen: false);
+                  final currentAuthUser = authService.currentUser;
+                  if (currentAuthUser != null) {
+                    _firestoreService.saveUser(currentUser!, currentAuthUser.uid);
+                  }
+
                   Navigator.pop(context);
                 }
               },
@@ -118,16 +127,39 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
   void _deleteProject(Project project) {
     setState(() {
       currentUser?.projects.remove(project);
-      _saveData();
     });
+
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final currentAuthUser = authService.currentUser;
+    if (currentAuthUser != null) {
+      _firestoreService.saveUser(currentUser!, currentAuthUser.uid);
+    }
   }
 
+  void _onProjectUpdated(Project updatedProject) {
+    if (currentUser == null) return;
+
+    final index = currentUser!.projects.indexWhere((p) => p.name == updatedProject.name);
+    if (index != -1) {
+      setState(() {
+        currentUser!.projects[index] = updatedProject;
+      });
+
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final currentAuthUser = authService.currentUser;
+      if (currentAuthUser != null) {
+        _firestoreService.saveUser(currentUser!, currentAuthUser.uid);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final authService = Provider.of<AuthService>(context);
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(currentUser?.name ?? '📊 Трекер задач'),
+        title: Text(authService.currentUser?.email ?? '📊 Трекер задач'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         bottom: TabBar(
@@ -140,15 +172,14 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
       ),
 
       drawer: DrawerScreen(
-        currentUser: currentUser,
-        onUserSelected: (user) {
-          setState(() => currentUser = user);
-        },
+        userEmail: authService.currentUser?.email,
       ),
+
       body: TabBarView(
         controller: _tabController,
         children: [
-          ProjectListScreen(
+          currentUser != null
+              ? ProjectListScreen(
             currentUser: currentUser,
             onUserChanged: (user) {
               setState(() => currentUser = user);
@@ -156,8 +187,12 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
             onAddProject: _addProject,
             onDeleteProject: _deleteProject,
             onAddProgressHistory: _addProgressHistory,
-          ),
-          StatisticsWidgets.buildStatisticsTab(context, currentUser),
+          )
+              : const Center(child: CircularProgressIndicator()),
+
+          currentUser != null
+              ? StatisticsWidgets.buildStatisticsTab(context, currentUser)
+              : const Center(child: CircularProgressIndicator()),
         ],
       ),
 

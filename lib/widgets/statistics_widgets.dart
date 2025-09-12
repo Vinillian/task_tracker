@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import '../models/user.dart';
+import '../models/app_user.dart';
 import '../utils/progress_utils.dart';
 import 'github_calendar.dart';
 
 class StatisticsWidgets {
-  static Widget buildStatisticsTab(BuildContext context, User? user) {
+  static Widget buildStatisticsTab(BuildContext context, AppUser? user) {
     if (user == null) {
       return const Center(child: Text('Нет выбранного пользователя'));
     }
@@ -24,7 +24,6 @@ class StatisticsWidgets {
           completedTasks += 1;
         }
 
-        // Учитываем подзадачи
         for (var subtask in task.subtasks) {
           totalSteps += subtask.totalSteps;
           completedSteps += subtask.completedSteps;
@@ -40,17 +39,11 @@ class StatisticsWidgets {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // Календарь активности - ИЗМЕНИТЬ ЭТУ СТРОКУ
-            GitHubCalendar(userName: user.name), // ← ЗДЕСЬ ИЗМЕНЕНИЕ
-
+            GitHubCalendar(userName: user.name),
             const SizedBox(height: 24),
-
-            // Общая статистика
             Text('Общая статистика',
                 style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 16),
-
-            // Прогресс по задачам
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -65,10 +58,7 @@ class StatisticsWidgets {
                 ),
               ),
             ),
-
             const SizedBox(height: 16),
-
-            // Прогресс по шагам
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -83,14 +73,10 @@ class StatisticsWidgets {
                 ),
               ),
             ),
-
             const SizedBox(height: 24),
-
-            // Статистика по проектам
             Text('Статистика по проектам',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 16),
-
             ...user.projects.map((project) {
               double projectProgress = 0.0;
               int projectTasks = project.tasks.length;

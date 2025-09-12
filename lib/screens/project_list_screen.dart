@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import '../models/user.dart';
+import '../models/app_user.dart';
 import '../models/project.dart';
 import '../services/firestore_service.dart';
 import '../widgets/dialogs.dart';
 import 'project_detail_screen.dart';
 
 class ProjectListScreen extends StatelessWidget {
-  final User? currentUser;
-  final Function(User?) onUserChanged;
+  final AppUser? currentUser;
+  final Function(AppUser?) onUserChanged;
   final Function() onAddProject;
   final Function(Project) onDeleteProject;
   final Function(String, int, String) onAddProgressHistory;
@@ -22,17 +22,12 @@ class ProjectListScreen extends StatelessWidget {
     required this.onAddProgressHistory,
   });
 
-  void _openProject(Project project) {
-    // Этот метод будет использоваться когда будем переходить к деталям проекта
-  }
-
   @override
   Widget build(BuildContext context) {
     if (currentUser == null) {
       return const Center(child: Text('Добавьте первый проект'));
     }
 
-    // УБЕРИТЕ Column и ElevatedButton, оставьте только ListView
     return ListView.builder(
       itemCount: currentUser!.projects.length,
       itemBuilder: (context, index) {
@@ -59,10 +54,9 @@ class ProjectListScreen extends StatelessWidget {
                   project: project,
                   onProjectUpdated: (updatedProject) {
                     currentUser!.projects[index] = updatedProject;
-                    _firestoreService.saveUser(currentUser!);
                     onUserChanged(currentUser);
                   },
-                  onAddProgressHistory: onAddProgressHistory, // ДОБАВИТЬ
+                  onAddProgressHistory: onAddProgressHistory,
                 ),
               ),
             );

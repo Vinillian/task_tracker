@@ -1,74 +1,49 @@
 import 'package:flutter/material.dart';
-import '../models/user.dart';
-import '../services/firestore_service.dart';
-import '../widgets/dialogs.dart';
+import '../services/auth_service.dart';
+import 'package:provider/provider.dart';
 
 class DrawerScreen extends StatelessWidget {
-  final User? currentUser;
-  final Function(User) onUserSelected;
-  final FirestoreService _firestoreService = FirestoreService();
+  final String? userEmail;
 
-  DrawerScreen({
+  const DrawerScreen({
     super.key,
-    required this.currentUser,
-    required this.onUserSelected,
+    required this.userEmail,
   });
 
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      child: StreamBuilder<List<User>>(
-        stream: _firestoreService.usersStream(),
-        builder: (context, snapshot) {
-          final users = snapshot.data ?? [];
-
-          return ListView(
-            children: [
-              const DrawerHeader(
-                decoration: BoxDecoration(color: Colors.blue),
-                child: Text(
-                  'Пользователи',
+      child: ListView(
+        children: [
+          DrawerHeader(
+            decoration: BoxDecoration(color: Colors.blue),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  userEmail ?? 'Гость',
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Task Tracker',
                   style: TextStyle(color: Colors.white, fontSize: 18),
                 ),
-              ),
-              ...users.map((user) => ListTile(
-                title: Text(user.name),
-                selected: user.name == currentUser?.name,
-                onTap: () {
-                  Navigator.pop(context);
-                  onUserSelected(user);
-                },
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () async {
-                    final confirm = await Dialogs.showConfirmDialog(
-                      context: context,
-                      title: 'Удалить пользователя',
-                      message:
-                      'Вы уверены, что хотите удалить ${user.name}?',
-                    );
-                    if (confirm) await _firestoreService.deleteUser(user);
-                  },
-                ),
-              )),
-              ListTile(
-                leading: const Icon(Icons.add),
-                title: const Text('Добавить пользователя'),
-                onTap: () async {
-                  final name = await Dialogs.showTextInputDialog(
-                    context: context,
-                    title: 'Новый пользователь',
-                  );
-                  if (name != null && name.isNotEmpty) {
-                    final newUser =
-                    User(name: name, projects: [], progressHistory: []);
-                    await _firestoreService.saveUser(newUser);
-                  }
-                },
-              ),
-            ],
-          );
-        },
+              ],
+            ),
+          ),
+
+          // КНОПКА ВЫХОДА
+          ListTile(
+            leading: Icon(Icons.logout),
+            title: Text('Выйти'),
+            onTap: () async {
+              final authService = Provider.of<AuthService>(context, listen: false);
+              await authService.signOut();
+              Navigator.pop(context);
+            },
+          ),
+        ],
       ),
     );
   }
