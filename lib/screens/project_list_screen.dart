@@ -11,9 +11,8 @@ class ProjectListScreen extends StatelessWidget {
   final Function() onAddProject;
   final Function(Project) onDeleteProject;
   final Function(String, int, String) onAddProgressHistory;
-  final FirestoreService _firestoreService = FirestoreService();
 
-  ProjectListScreen({
+  const ProjectListScreen({
     super.key,
     required this.currentUser,
     required this.onUserChanged,
@@ -22,65 +21,97 @@ class ProjectListScreen extends StatelessWidget {
     required this.onAddProgressHistory,
   });
 
+  void _saveCurrentUser() {
+    if (currentUser == null) return;
+
+    print('💾 Сохранение пользователя: ${currentUser!.username}');
+    print('📊 Проектов: ${currentUser!.projects.length}');
+
+    onUserChanged(currentUser);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (currentUser == null) {
       return const Center(child: Text('Добавьте первый проект'));
     }
 
+    if (currentUser!.projects.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.folder_open, size: 64, color: Colors.grey),
+            const SizedBox(height: 16),
+            const Text('Нет проектов', style: TextStyle(fontSize: 18)),
+            const SizedBox(height: 8),
+            const Text('Нажмите + чтобы создать первый проект'),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: onAddProject,
+              child: const Text('Создать проект'),
+            ),
+          ],
+        ),
+      );
+    }
+
     return ListView.builder(
       itemCount: currentUser!.projects.length,
       itemBuilder: (context, index) {
         final project = currentUser!.projects[index];
-        final totalSteps = project.tasks.fold<int>(0, (sum, task) => sum + task.totalSteps);
-        final completedSteps = project.tasks.fold<int>(0, (sum, task) => sum + task.completedSteps);
-        final progress = totalSteps > 0 ? completedSteps / totalSteps : 0;
 
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundColor: _getProjectProgressColor(progress.toDouble()),
-            child: Text(
-              '${(progress * 100).toStringAsFixed(0)}%',
-              style: const TextStyle(fontSize: 10, color: Colors.white),
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: ListTile(
+            leading: const Icon(Icons.folder, color: Colors.blue),
+            title: Text(
+              project.name,
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-          ),
-          title: Text(project.name),
-          subtitle: Text('$completedSteps/$totalSteps шагов • ${project.tasks.length} задач'),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ProjectDetailScreen(
-                  project: project,
-                  onProjectUpdated: (updatedProject) {
-                    currentUser!.projects[index] = updatedProject;
-                    onUserChanged(currentUser);
-                  },
-                  onAddProgressHistory: onAddProgressHistory,
+            subtitle: Text('Задач: ${project.tasks.length}'),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProjectDetailScreen(
+                    project: project,
+                    onProjectUpdated: (updatedProject) {
+                      final updatedProjects = List<Project>.from(currentUser!.projects);
+                      updatedProjects[index] = updatedProject;
+
+                      final updatedUser = AppUser(
+                        username: currentUser!.username,
+                        email: currentUser!.email,
+                        projects: updatedProjects,
+                        progressHistory: List<dynamic>.from(currentUser!.progressHistory),
+                      );
+
+                      onUserChanged(updatedUser);
+                      _saveCurrentUser();
+                    },
+                    onAddProgressHistory: onAddProgressHistory,
+                  ),
                 ),
-              ),
-            );
-          },
-          trailing: IconButton(
-            icon: const Icon(Icons.delete, color: Colors.red),
-            onPressed: () async {
-              final confirm = await Dialogs.showConfirmDialog(
-                context: context,
-                title: 'Удалить проект',
-                message: 'Удалить проект "${project.name}"?',
               );
-              if (confirm) onDeleteProject(project);
             },
+            trailing: IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: () async {
+                final confirm = await Dialogs.showConfirmDialog(
+                  context: context,
+                  title: 'Удалить проект',
+                  message: 'Удалить проект "${project.name}"?',
+                );
+                if (confirm) {
+                  onDeleteProject(project);
+                  _saveCurrentUser();
+                }
+              },
+            ),
           ),
         );
       },
     );
-  }
-
-  Color _getProjectProgressColor(double progress) {
-    if (progress >= 1.0) return Colors.green;
-    if (progress >= 0.7) return Colors.orange;
-    if (progress >= 0.3) return Colors.yellow;
-    return Colors.red;
   }
 }
