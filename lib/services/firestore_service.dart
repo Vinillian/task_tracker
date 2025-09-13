@@ -10,13 +10,14 @@ class FirestoreService {
   Future<void> saveUser(AppUser user, String uid) async {
     try {
       final userData = {
-        'name': user.name,
+        'username': user.username,  // ← ИЗМЕНИТЬ
+        'email': user.email,        // ← ДОБАВИТЬ
         'projects': user.projects.map((p) => p.toFirestore()).toList(),
         'progressHistory': user.progressHistory,
       };
 
       await _usersRef.doc(uid).set(userData, SetOptions(merge: true));
-      print('User ${user.name} saved successfully to Firestore with UID: $uid');
+      print('User ${user.username} saved successfully to Firestore with UID: $uid');  // ← ИЗМЕНИТЬ
     } catch (e) {
       print('Error saving user to Firestore: $e');
       rethrow;

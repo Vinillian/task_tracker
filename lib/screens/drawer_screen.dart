@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'package:provider/provider.dart';
+import '../models/app_user.dart'; // ← ДОБАВИТЬ этот импорт
 
 class DrawerScreen extends StatelessWidget {
   final String? userEmail;
+  final AppUser? currentUser;  // ← Добавьте этот параметр
 
   const DrawerScreen({
     super.key,
     required this.userEmail,
+    required this.currentUser,  // ← Добавьте этот параметр
   });
 
   @override
@@ -16,13 +19,17 @@ class DrawerScreen extends StatelessWidget {
       child: ListView(
         children: [
           DrawerHeader(
-            decoration: BoxDecoration(color: Colors.blue),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  userEmail ?? 'Гость',
-                  style: TextStyle(color: Colors.white, fontSize: 16),
+                  currentUser?.username ?? userEmail ?? 'Гость',
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  userEmail ?? '',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
                 SizedBox(height: 8),
                 Text(

@@ -2,12 +2,14 @@ import 'project.dart';
 import 'progress_history.dart';
 
 class AppUser {
-  String name;
+  String username;  // ← изменено с name на username
+  String email;     // ← новое поле
   List<Project> projects;
   List<dynamic> progressHistory;
 
   AppUser({
-    required this.name,
+    required this.username,  // ← изменено
+    required this.email,     // ← добавлено
     required this.projects,
     required this.progressHistory,
   });
@@ -15,14 +17,14 @@ class AppUser {
   Map<String, dynamic> toFirestore() {
     final migratedHistory = progressHistory.map((item) {
       if (item is ProgressHistory) {
-        print('Мигрируем ProgressHistory в Map');
         return item.toFirestore();
       }
       return item;
     }).toList();
 
     return {
-      'name': name,
+      'username': username,  // ← изменено
+      'email': email,        // ← добавлено
       'projects': projects.map((p) => p.toFirestore()).toList(),
       'progressHistory': migratedHistory,
     };
@@ -30,7 +32,8 @@ class AppUser {
 
   static AppUser fromFirestore(Map<String, dynamic> data) {
     return AppUser(
-      name: data['name'] ?? '',
+      username: data['username'] ?? '',  // ← изменено
+      email: data['email'] ?? '',        // ← добавлено
       projects: (data['projects'] as List<dynamic>?)
           ?.map((p) => Project.fromFirestore(Map<String, dynamic>.from(p)))
           .toList() ?? [],
@@ -38,5 +41,10 @@ class AppUser {
     );
   }
 
-  static AppUser empty() => AppUser(name: '', projects: [], progressHistory: []);
+  static AppUser empty() => AppUser(
+      username: '',
+      email: '',
+      projects: [],
+      progressHistory: []
+  );
 }

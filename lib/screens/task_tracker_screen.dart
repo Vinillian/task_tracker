@@ -42,9 +42,11 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
             currentUser = AppUser.fromFirestore(userData);
           });
         } else {
+          // Создаем нового пользователя с email как username
           setState(() {
             currentUser = AppUser(
-              name: currentAuthUser.email ?? 'User',
+              username: currentAuthUser.email?.split('@').first ?? 'User',
+              email: currentAuthUser.email ?? '',
               projects: [],
               progressHistory: [],
             );
@@ -159,7 +161,7 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(authService.currentUser?.email ?? '📊 Трекер задач'),
+        title: Text(currentUser?.username ?? authService.currentUser?.email ?? '📊 Трекер задач'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         bottom: TabBar(
@@ -173,6 +175,7 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
 
       drawer: DrawerScreen(
         userEmail: authService.currentUser?.email,
+        currentUser: currentUser,  // ← ДОБАВИТЬ
       ),
 
       body: TabBarView(

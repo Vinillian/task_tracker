@@ -210,7 +210,7 @@ class GitHubCalendar extends StatelessWidget {
           return const Center(child: Text('Данные пользователя загружаются...'));
         }
 
-        if (user.name.isEmpty) {
+        if (user.username.isEmpty) {  // ← ИЗМЕНИТЬ
           return const Center(child: Text('Пользователь не найден'));
         }
 
@@ -325,7 +325,7 @@ class GitHubCalendar extends StatelessWidget {
   }
   void _checkDataFormat(AppUser user) {
     print('=== ПРОВЕРКА ФОРМАТА ДАННЫХ ===');
-    print('Пользователь: ${user.name}');
+    print('Пользователь: ${user.username}');  // ← ИЗМЕНИТЬ
     print('Записей в истории: ${user.progressHistory.length}');
 
     for (int i = 0; i < user.progressHistory.length; i++) {
