@@ -1,26 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // ← ДОБАВИТЬ
+import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'screens/task_tracker_screen.dart';
 import 'services/firestore_service.dart';
 import 'services/auth_service.dart';
 import 'screens/auth_screen.dart';
+import 'repositories/local_repository.dart'; // ← ДОБАВИТЬ
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Инициализируем локальное хранилище ПЕРЕД runApp
+  final localRepository = LocalRepository();
+  await localRepository.init();
+
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  runApp(const MyApp());
+  runApp(MyApp(localRepository: localRepository)); // ← ПЕРЕДАТЬ репозиторий
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final LocalRepository localRepository; // ← ДОБАВИТЬ поле
+
+  const MyApp({super.key, required this.localRepository}); // ← ОБНОВИТЬ конструктор
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        Provider<LocalRepository>(create: (_) => localRepository), // ← ДОБАВИТЬ провайдер
         Provider<AuthService>(create: (_) => AuthService()),
         Provider<FirestoreService>(create: (_) => FirestoreService()),
       ],

@@ -8,6 +8,7 @@ import '../models/progress_history.dart';
 import '../widgets/statistics_widgets.dart';
 import 'project_list_screen.dart';
 import 'drawer_screen.dart';
+import '../repositories/local_repository.dart'; // ← ДОБАВИТЬ в начале файла
 
 class TaskTrackerScreen extends StatefulWidget {
   const TaskTrackerScreen({super.key});
@@ -31,36 +32,45 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
   }
 
   void _loadUserData() async {
+    final localRepo = Provider.of<LocalRepository>(context, listen: false);
+
+    // ✅ ПЕРВОЕ: Загружаем из локального хранилища
+    final localUser = localRepo.loadUser();
+    if (localUser != null && localUser.projects.isNotEmpty) {
+      print('✅ Используем локальные данные из Hive');
+      if (mounted) {
+        setState(() => currentUser = localUser);
+      }
+      return; // Не загружаем из Firestore если есть локальные данные
+    }
+
+    // ✅ ВТОРОЕ: Если локальных данных нет, грузим из Firestore
     final authService = Provider.of<AuthService>(context, listen: false);
     final currentAuthUser = authService.currentUser;
+
     if (currentAuthUser != null) {
       try {
-        print('🔍 Загрузка данных пользователя UID: ${currentAuthUser.uid}');
+        print('🔍 Загрузка данных пользователя из Firestore');
         final userDoc = await _firestoreService.getUserDocument(currentAuthUser.uid);
 
         if (userDoc.exists) {
           final userData = userDoc.data() as Map<String, dynamic>;
-          setState(() {
-            currentUser = AppUser.fromFirestore(userData);
-          });
+          final firestoreUser = AppUser.fromFirestore(userData);
 
-          if (currentUser?.projects.isEmpty == true) {
+          if (mounted) {
+            setState(() {
+              currentUser = firestoreUser;
+            });
+          }
+
+          await localRepo.saveUser(firestoreUser);
+          print('✅ Данные сохранены в Hive');
+
+          if (firestoreUser.projects.isEmpty) {
             print('ℹ️ Пользователь существует, но проекты отсутствуют');
           } else {
-            print('✅ Загружено ${currentUser?.projects.length} проектов');
+            print('✅ Загружено ${firestoreUser.projects.length} проектов из Firestore');
           }
-        } else {
-          // Создаем нового пользователя
-          setState(() {
-            currentUser = AppUser(
-              username: currentAuthUser.email?.split('@').first ?? 'User',
-              email: currentAuthUser.email ?? '',
-              projects: [],
-              progressHistory: [],
-            );
-          });
-          await _firestoreService.saveUser(currentUser!, currentAuthUser.uid);
-          print('✅ Создан новый пользователь: ${currentUser!.username}');
         }
       } catch (e) {
         print('❌ Ошибка загрузки пользователя: $e');
@@ -70,22 +80,21 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
 
   // Метод для сохранения текущего пользователя в Firestore
   void _saveCurrentUser() {
+    if (currentUser == null) return;
+
+    final localRepo = Provider.of<LocalRepository>(context, listen: false);
+    localRepo.saveUser(currentUser!);
+    print('✅ Данные сохранены в Hive');
+
     final authService = Provider.of<AuthService>(context, listen: false);
     final currentAuthUser = authService.currentUser;
+
     if (currentAuthUser != null && currentUser != null) {
       setState(() {
         _saveMessage = 'Сохранение...';
       });
 
-      print('💾 Сохранение пользователя: ${currentUser!.username}');
-      print('📊 Проектов: ${currentUser!.projects.length}');
-      print('📈 Записей истории: ${currentUser!.progressHistory.length}');
-
-      // Выводим детальную информацию о проектах
-      for (var i = 0; i < currentUser!.projects.length; i++) {
-        print('   Проект $i: ${currentUser!.projects[i].name}');
-        print('   Задач: ${currentUser!.projects[i].tasks.length}');
-      }
+      print('💾 Сохранение пользователя в Firestore: ${currentUser!.username}');
 
       _firestoreService.saveUser(currentUser!, currentAuthUser.uid).then((_) {
         setState(() {
@@ -101,7 +110,7 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
         setState(() {
           _saveMessage = 'Ошибка сохранения: $error';
         });
-        print('❌ Ошибка сохранения: $error');
+        print('❌ Ошибка сохранения в Firestore: $error');
       });
     }
   }

@@ -49,6 +49,26 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
+  // Добавьте этот метод в класс _ProjectDetailScreenState
+  void _editProjectName() async {
+    final newName = await Dialogs.showTextInputDialog(
+      context: context,
+      title: 'Редактировать проект',
+      initialValue: widget.project.name,
+    );
+
+    if (newName != null && newName.isNotEmpty) {
+      // Создаем новый проект с обновленным именем
+      final updatedProject = Project(
+        name: newName,
+        tasks: widget.project.tasks,
+      );
+
+      // Вызываем callback с обновленным проектом
+      widget.onProjectUpdated(updatedProject);
+    }
+  }
+
   void _addTask() async {
     final name = await Dialogs.showTextInputDialog(
       context: context,
@@ -88,7 +108,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
       if (steps != null && steps > 0) {
         setState(() {
-          TaskService.updateTask(task, name, steps);
+          final taskIndex = widget.project.tasks.indexOf(task);
+          widget.project.tasks[taskIndex] = TaskService.updateTask(task, name, steps);
         });
         widget.onProjectUpdated(widget.project);
       }
@@ -142,10 +163,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
     if (steps != null && steps > 0) {
       setState(() {
-        task.completedSteps = (task.completedSteps + steps).clamp(0, task.totalSteps);
+        final taskIndex = widget.project.tasks.indexOf(task);
+        widget.project.tasks[taskIndex] = TaskService.addProgressToTask(task, steps);
       });
       widget.onProjectUpdated(widget.project);
-
       widget.onAddProgressHistory(task.name, steps, 'task');
     }
   }
@@ -159,10 +180,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
     if (steps != null && steps > 0) {
       setState(() {
-        subtask.completedSteps = (subtask.completedSteps + steps).clamp(0, subtask.totalSteps);
+        final subtaskIndex = task.subtasks.indexOf(subtask);
+        task.subtasks[subtaskIndex] = TaskService.addProgressToSubtask(subtask, steps);
       });
       widget.onProjectUpdated(widget.project);
-
       widget.onAddProgressHistory(subtask.name, steps, 'subtask');
     }
   }
@@ -184,7 +205,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
       if (steps != null && steps > 0) {
         setState(() {
-          TaskService.updateSubtask(subtask, name, steps);
+          final subtaskIndex = task.subtasks.indexOf(subtask);
+          task.subtasks[subtaskIndex] = TaskService.updateSubtask(subtask, name, steps);
         });
         widget.onProjectUpdated(widget.project);
       }
@@ -214,20 +236,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),
-            onPressed: () async {
-              final newName = await Dialogs.showTextInputDialog(
-                context: context,
-                title: 'Редактировать проект',
-                initialValue: widget.project.name,
-              );
-
-              if (newName != null && newName.isNotEmpty) {
-                setState(() {
-                  widget.project.name = newName;
-                });
-                widget.onProjectUpdated(widget.project);
-              }
-            },
+            onPressed: _editProjectName, // ← Используем новый метод
           ),
         ],
       ),
