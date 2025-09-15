@@ -1,15 +1,13 @@
-import 'dart:typed_data';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import '../services/auth_service.dart';
 import 'package:provider/provider.dart';
+import '../services/auth_service.dart';
 import '../models/app_user.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:share_plus/share_plus.dart';
 import '../repositories/local_repository.dart';
+import '../services/firestore_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import '../services/firestore_service.dart'; // ← ДОБАВИТЬ
+import 'package:share_plus/share_plus.dart'; // ← ДОБАВИТЬ для мобильного экспорта
+import 'dart:convert' show utf8;
 
 class DrawerScreen extends StatelessWidget {
   final String? userEmail;
@@ -50,6 +48,69 @@ class DrawerScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _importFromText(BuildContext context) async {
+    final jsonString = await _showJsonInputDialog(context);
+    if (jsonString != null && jsonString.isNotEmpty) {
+      try {
+        final localRepo = Provider.of<LocalRepository>(context, listen: false);
+        final importedUser = await localRepo.importFromJson(jsonString);
+
+        final authService = Provider.of<AuthService>(context, listen: false);
+        final currentAuthUser = authService.currentUser;
+
+        if (currentAuthUser != null) {
+          final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+          await firestoreService.saveUser(importedUser, currentAuthUser.uid);
+          await localRepo.saveUser(importedUser);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('✅ Данные успешно импортированы')),
+          );
+
+          // Просто закрываем drawer, данные обновятся автоматически
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка импорта: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _exportData(BuildContext context) async {
+    final localRepo = Provider.of<LocalRepository>(context, listen: false);
+    Navigator.pop(context); // Закрываем drawer сразу
+
+    try {
+      final jsonString = await localRepo.exportToJson();
+
+      if (kIsWeb) {
+        // ВЕБ-ВЕРСИЯ - копируем в буфер обмена
+        await Clipboard.setData(ClipboardData(text: jsonString));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('✅ Данные скопированы в буфер обмена')),
+        );
+      } else {
+        // МОБИЛЬНАЯ ВЕРСИЯ - сохраняем в файл и делимся
+        final fileName = 'task_tracker_export_${DateTime.now().millisecondsSinceEpoch}.json';
+
+        // Создаем временный файл и делимся им
+        await Share.shareXFiles([
+          XFile.fromData(
+            Uint8List.fromList(utf8.encode(jsonString)),
+            name: fileName,
+            mimeType: 'application/json',
+          )
+        ]);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка экспорта: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Drawer(
@@ -88,152 +149,19 @@ class DrawerScreen extends StatelessWidget {
             },
           ),
 
-          // ТЕСТОВАЯ КНОПКА ДЛЯ ОТЛАДКИ
+          // ЭКСПОРТ ДАННЫХ
           ListTile(
-            leading: Icon(Icons.bug_report),
-            title: Text('Тест экспорта'),
-            onTap: () async {
-              Navigator.pop(context);
-              final localRepo = Provider.of<LocalRepository>(context, listen: false);
-              try {
-                final jsonString = await localRepo.exportToJson();
-                print('✅ ЭКСПОРТ УСПЕШЕН:');
-                print(jsonString);
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('✅ Данные экспортированы (см. консоль)')),
-                );
-              } catch (e) {
-                print('❌ ОШИБКА ЭКСПОРТА: $e');
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Ошибка экспорта: $e')),
-                );
-              }
-            },
+            leading: Icon(Icons.upload),
+            title: Text('Экспорт данных'),
+            onTap: () => _exportData(context),
           ),
 
-          // ВЕБ-ВЕРСИЯ (работает в Chrome)
-          if (kIsWeb) ...[
-            ListTile(
-              leading: Icon(Icons.upload),
-              title: Text('Экспорт данных (Web)'),
-              onTap: () async {
-                Navigator.pop(context);
-                final localRepo = Provider.of<LocalRepository>(context, listen: false);
-                try {
-                  final jsonString = await localRepo.exportToJson();
-                  // Копируем в буфер обмена
-                  await Clipboard.setData(ClipboardData(text: jsonString));
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('✅ Данные скопированы в буфер обмена')),
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Ошибка экспорта: $e')),
-                  );
-                }
-              },
-            ),
-
-            ListTile(
-              leading: Icon(Icons.download),
-              title: Text('Импорт данных (Web)'),
-              onTap: () async {
-                Navigator.pop(context);
-                final localRepo = Provider.of<LocalRepository>(context, listen: false);
-
-                final jsonString = await _showJsonInputDialog(context);
-                if (jsonString != null && jsonString.isNotEmpty) {
-                  try {
-                    final importedUser = await localRepo.importFromJson(jsonString);
-
-                    // ✅ ОБНОВЛЯЕМ СОСТОЯНИЕ ПРИЛОЖЕНИЯ через Provider
-                    // Вместо прямого доступа к состоянию, используем более надежный способ
-                    final authService = Provider.of<AuthService>(context, listen: false);
-                    final currentAuthUser = authService.currentUser;
-
-                    if (currentAuthUser != null) {
-                      // Сохраняем в Firestore и локально
-                      final firestoreService = Provider.of<FirestoreService>(context, listen: false);
-                      await firestoreService.saveUser(importedUser, currentAuthUser.uid);
-                      await localRepo.saveUser(importedUser);
-
-                      // Показываем сообщение об успехе
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('✅ Данные успешно импортированы')),
-                      );
-
-                      // Перезагружаем страницу для обновления UI
-                      Navigator.pushReplacementNamed(context, '/');
-                    }
-                  } catch (e) {
-                    print('❌ Ошибка импорта: $e');
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Ошибка импорта: $e')),
-                    );
-                  }
-                }
-              },
-            ),
-          ],
-
-          // МОБИЛЬНАЯ ВЕРСИЯ (скрыта в вебе)
-          if (!kIsWeb) ...[
-            ListTile(
-              leading: Icon(Icons.upload),
-              title: Text('Экспорт данных'),
-              onTap: () async {
-                Navigator.pop(context);
-                final localRepo = Provider.of<LocalRepository>(context, listen: false);
-                try {
-                  final jsonString = await localRepo.exportToJson();
-                  final fileName = 'task_tracker_export_${DateTime.now().millisecondsSinceEpoch}.json';
-
-                  final result = await Share.shareXFiles([XFile.fromData(
-                    Uint8List.fromList(utf8.encode(jsonString)),
-                    name: fileName,
-                    mimeType: 'application/json',
-                  )]);
-
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Ошибка экспорта: $e')),
-                  );
-                }
-              },
-            ),
-
-            ListTile(
-              leading: Icon(Icons.download),
-              title: Text('Импорт данных (Web)'),
-              onTap: () async {
-                Navigator.pop(context); // Закрываем Drawer
-
-                final jsonString = await _showJsonInputDialog(context);
-                if (jsonString != null && jsonString.isNotEmpty) {
-                  try {
-                    final localRepo = Provider.of<LocalRepository>(context, listen: false);
-                    await localRepo.importFromJson(jsonString);
-
-                    // ✅ Простое сообщение - данные сохранены, нужно обновить
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('✅ Данные импортированы в локальное хранилище'),
-                        duration: Duration(seconds: 3),
-                      ),
-                    );
-
-                  } catch (e) {
-                    print('❌ Ошибка импорта: $e');
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Ошибка импорта: $e')),
-                    );
-                  }
-                }
-              },
-            ),
-          ],
+          // ИМПОРТ ДАННЫХ
+          ListTile(
+            leading: Icon(Icons.download),
+            title: Text('Импорт данных'),
+            onTap: () => _importFromText(context),
+          ),
         ],
       ),
     );

@@ -112,27 +112,63 @@ class LocalRepository {
 
   // Импорт из JSON
   Future<AppUser> importFromJson(String jsonString) async {
+    print('🔄 Начало импорта JSON, длина: ${jsonString.length} символов');
+
     try {
-      // ✅ УБИРАЕМ ЛИШНИЕ ПРОБЕЛЫ И ПЕРЕВОДЫ СТРОК
       final cleanedJsonString = jsonString.trim();
+      print('✅ JSON очищен, длина: ${cleanedJsonString.length} символов');
+
+      // Логируем начало строки для диагностики
+      if (cleanedJsonString.length > 100) {
+        print('📝 Начало JSON: ${cleanedJsonString.substring(0, 100)}...');
+      } else {
+        print('📝 Весь JSON: $cleanedJsonString');
+      }
+
+      // Проверяем, что это валидный JSON
+      if (!cleanedJsonString.startsWith('{') || !cleanedJsonString.endsWith('}')) {
+        print('❌ Неверный формат JSON: должен начинаться с { и заканчиваться }');
+        throw Exception('Неверный формат JSON файла');
+      }
 
       final jsonMap = jsonDecode(cleanedJsonString) as Map<String, dynamic>;
+      print('✅ JSON успешно распарсен');
 
-      // ✅ ПРОВЕРЯЕМ ОБЯЗАТЕЛЬНЫЕ ПОЛЯ
-      if (jsonMap['username'] == null || jsonMap['email'] == null) {
-        throw Exception('Invalid JSON: missing required fields (username, email)');
+      // ✅ ПРОВЕРЯЕМ ОБЯЗАТЕЛЬНЫЕ ПОЛЯ с логированием
+      if (jsonMap['username'] == null) {
+        print('❌ Отсутствует обязательное поле: username');
+        throw Exception('Неверный формат данных: отсутствует поле username');
       }
+      if (jsonMap['email'] == null) {
+        print('❌ Отсутствует обязательное поле: email');
+        throw Exception('Неверный формат данных: отсутствует поле email');
+      }
+      if (jsonMap['projects'] == null) {
+        print('❌ Отсутствует обязательное поле: projects');
+        throw Exception('Неверный формат данных: отсутствует поле projects');
+      }
+
+      print('📊 Загружаем данные пользователя: ${jsonMap['username']}');
+      print('📧 Email: ${jsonMap['email']}');
+      print('📦 Проектов: ${jsonMap['projects'] is List ? (jsonMap['projects'] as List).length : 'неверный формат'}');
 
       final user = AppUser.fromFirestore(jsonMap);
       await saveUser(user);
 
       print('✅ Импорт успешен: ${user.username}, проектов: ${user.projects.length}');
+      print('📈 Записей в истории: ${user.progressHistory.length}');
+
       return user;
 
+      // Исправляем обработку ошибок в importFromJson
+    } on FormatException catch (e) {
+      print('❌ Ошибка формата JSON: $e');
+      // Убираем e.stackTrace, так как его нет в FormatException
+      throw Exception('Неверный формат JSON: $e');
     } catch (e) {
-      print('❌ Ошибка импорта JSON: $e');
-      print('❌ JSON данные: ${jsonString.substring(0, 200)}...');
-      throw Exception('Invalid JSON format: $e');
+      print('❌ Неожиданная ошибка импорта JSON: $e');
+      // Для общего исключения можно использовать stackTrace если нужно
+      throw Exception('Ошибка импорта: $e');
     }
   }
 

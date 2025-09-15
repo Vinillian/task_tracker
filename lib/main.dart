@@ -7,7 +7,11 @@ import 'screens/task_tracker_screen.dart';
 import 'services/firestore_service.dart';
 import 'services/auth_service.dart';
 import 'screens/auth_screen.dart';
-import 'repositories/local_repository.dart'; // ← ДОБАВИТЬ
+import 'repositories/local_repository.dart';
+
+// Глобальные ключи для доступа к сервисам
+final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,19 +21,20 @@ void main() async {
   await localRepository.init();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  runApp(MyApp(localRepository: localRepository)); // ← ПЕРЕДАТЬ репозиторий
+
+  runApp(MyApp(localRepository: localRepository));
 }
 
 class MyApp extends StatelessWidget {
-  final LocalRepository localRepository; // ← ДОБАВИТЬ поле
+  final LocalRepository localRepository;
 
-  const MyApp({super.key, required this.localRepository}); // ← ОБНОВИТЬ конструктор
+  const MyApp({super.key, required this.localRepository});
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        Provider<LocalRepository>(create: (_) => localRepository), // ← ДОБАВИТЬ провайдер
+        Provider<LocalRepository>(create: (_) => localRepository),
         Provider<AuthService>(create: (_) => AuthService()),
         Provider<FirestoreService>(create: (_) => FirestoreService()),
       ],
@@ -37,6 +42,8 @@ class MyApp extends StatelessWidget {
         title: 'Task Tracker',
         theme: ThemeData(primarySwatch: Colors.blue),
         home: AuthWrapper(),
+        navigatorKey: navigatorKey,
+        scaffoldMessengerKey: scaffoldMessengerKey,
       ),
     );
   }
