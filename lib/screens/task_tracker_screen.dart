@@ -8,6 +8,7 @@ import '../models/progress_history.dart';
 import '../widgets/statistics_widgets.dart';
 import 'project_list_screen.dart';
 import 'drawer_screen.dart';
+import '../repositories/local_repository.dart';
 
 class TaskTrackerScreen extends StatefulWidget {
   const TaskTrackerScreen({super.key});
@@ -22,6 +23,7 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
   final FirestoreService _firestoreService = FirestoreService();
   late TabController _tabController;
   String? _saveMessage;
+  final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
 
   @override
   void initState() {
@@ -30,62 +32,84 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     _loadUserData();
   }
 
-  void _loadUserData() async {
+  // Метод обновления данных
+  Future<void> _refreshData() async {
+    print('🔄 Принудительное обновление данных...');
+    setState(() {
+      currentUser = null;
+    });
+    await _loadUserData();
+  }
+
+  // Изменяем метод чтобы возвращал Future<void>
+  Future<void> _loadUserData() async {
+    print('📥 Загрузка данных пользователя...');
+    final localRepo = Provider.of<LocalRepository>(context, listen: false);
+
+    final localUser = localRepo.loadUser();
+    if (localUser != null && localUser.projects.isNotEmpty) {
+      print('✅ Используем локальные данные из Hive');
+      if (mounted) {
+        setState(() => currentUser = localUser);
+      }
+      return;
+    }
+
     final authService = Provider.of<AuthService>(context, listen: false);
     final currentAuthUser = authService.currentUser;
+
     if (currentAuthUser != null) {
       try {
-        print('🔍 Загрузка данных пользователя UID: ${currentAuthUser.uid}');
+        print('🔍 Загрузка данных пользователя из Firestore...');
         final userDoc = await _firestoreService.getUserDocument(currentAuthUser.uid);
 
         if (userDoc.exists) {
           final userData = userDoc.data() as Map<String, dynamic>;
-          setState(() {
-            currentUser = AppUser.fromFirestore(userData);
-          });
+          final firestoreUser = AppUser.fromFirestore(userData);
 
-          if (currentUser?.projects.isEmpty == true) {
+          if (mounted) {
+            setState(() {
+              currentUser = firestoreUser;
+            });
+          }
+
+          await localRepo.saveUser(firestoreUser);
+          print('✅ Данные сохранены в Hive');
+
+          if (firestoreUser.projects.isEmpty) {
             print('ℹ️ Пользователь существует, но проекты отсутствуют');
-          } else {
-            print('✅ Загружено ${currentUser?.projects.length} проектов');
           }
         } else {
-          // Создаем нового пользователя
-          setState(() {
-            currentUser = AppUser(
-              username: currentAuthUser.email?.split('@').first ?? 'User',
-              email: currentAuthUser.email ?? '',
-              projects: [],
-              progressHistory: [],
-            );
-          });
-          await _firestoreService.saveUser(currentUser!, currentAuthUser.uid);
-          print('✅ Создан новый пользователь: ${currentUser!.username}');
+          print('ℹ️ Документ пользователя не существует в Firestore');
         }
       } catch (e) {
         print('❌ Ошибка загрузки пользователя: $e');
+        if (mounted) {
+          setState(() {
+            currentUser = AppUser.empty();
+          });
+        }
       }
     }
   }
 
   // Метод для сохранения текущего пользователя в Firestore
   void _saveCurrentUser() {
+    if (currentUser == null) return;
+
+    final localRepo = Provider.of<LocalRepository>(context, listen: false);
+    localRepo.saveUser(currentUser!);
+    print('✅ Данные сохранены в Hive');
+
     final authService = Provider.of<AuthService>(context, listen: false);
     final currentAuthUser = authService.currentUser;
+
     if (currentAuthUser != null && currentUser != null) {
       setState(() {
         _saveMessage = 'Сохранение...';
       });
 
-      print('💾 Сохранение пользователя: ${currentUser!.username}');
-      print('📊 Проектов: ${currentUser!.projects.length}');
-      print('📈 Записей истории: ${currentUser!.progressHistory.length}');
-
-      // Выводим детальную информацию о проектах
-      for (var i = 0; i < currentUser!.projects.length; i++) {
-        print('   Проект $i: ${currentUser!.projects[i].name}');
-        print('   Задач: ${currentUser!.projects[i].tasks.length}');
-      }
+      print('💾 Сохранение пользователя в Firestore: ${currentUser!.username}');
 
       _firestoreService.saveUser(currentUser!, currentAuthUser.uid).then((_) {
         setState(() {
@@ -101,7 +125,7 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
         setState(() {
           _saveMessage = 'Ошибка сохранения: $error';
         });
-        print('❌ Ошибка сохранения: $error');
+        print('❌ Ошибка сохранения в Firestore: $error');
       });
     }
   }
@@ -230,25 +254,29 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
               ),
             ),
           Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                currentUser != null
-                    ? ProjectListScreen(
-                  currentUser: currentUser,
-                  onUserChanged: (user) {
-                    setState(() => currentUser = user);
-                    _saveCurrentUser();
-                  },
-                  onAddProject: _addProject,
-                  onDeleteProject: _deleteProject,
-                  onAddProgressHistory: _addProgressHistory,
-                )
-                    : const Center(child: CircularProgressIndicator()),
-                currentUser != null
-                    ? StatisticsWidgets.buildStatisticsTab(context, currentUser)
-                    : const Center(child: CircularProgressIndicator()),
-              ],
+            child: RefreshIndicator(
+              key: _refreshIndicatorKey,
+              onRefresh: _refreshData,
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  currentUser != null
+                      ? ProjectListScreen(
+                    currentUser: currentUser,
+                    onUserChanged: (user) {
+                      setState(() => currentUser = user);
+                      _saveCurrentUser();
+                    },
+                    onAddProject: _addProject,
+                    onDeleteProject: _deleteProject,
+                    onAddProgressHistory: _addProgressHistory,
+                  )
+                      : const Center(child: CircularProgressIndicator()),
+                  currentUser != null
+                      ? StatisticsWidgets.buildStatisticsTab(context, currentUser)
+                      : const Center(child: CircularProgressIndicator()),
+                ],
+              ),
             ),
           ),
         ],

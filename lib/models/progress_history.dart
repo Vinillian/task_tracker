@@ -1,10 +1,23 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:hive/hive.dart';
+part 'progress_history.g.dart';
 
+@HiveType(typeId: 4)
 class ProgressHistory {
+  @HiveField(0)
   final DateTime date;
+
+  @HiveField(1)
   final String itemName;
+
+  @HiveField(2)
   final int stepsAdded;
+
+  @HiveField(3)
   final String itemType;
+
+// ... остальной код ...
+
 
   ProgressHistory({
     required this.date,

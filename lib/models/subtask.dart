@@ -1,7 +1,19 @@
+import 'package:hive/hive.dart';
+part 'subtask.g.dart';
+
+@HiveType(typeId: 3)
 class Subtask {
-  String name;
-  int completedSteps;
-  int totalSteps;
+  @HiveField(0)
+  final String name;
+
+  @HiveField(1)
+  final int completedSteps;
+
+  @HiveField(2)
+  final int totalSteps;
+
+// ... остальной код ...
+
 
   Subtask({
     required this.name,

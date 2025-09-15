@@ -1,8 +1,15 @@
 import 'task.dart';
 
+import 'package:hive/hive.dart';
+part 'project.g.dart';
+
+@HiveType(typeId: 1)
 class Project {
-  String name;
-  List<Task> tasks;
+  @HiveField(0)
+  final String name;
+
+  @HiveField(1)
+  final List<Task> tasks;
 
   Project({required this.name, required this.tasks});
 

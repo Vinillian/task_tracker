@@ -1,11 +1,25 @@
 import 'project.dart';
 import 'progress_history.dart';
+// Добавляем аннотацию @HiveType для класса и @HiveField для каждого поля
+import 'package:hive/hive.dart';
 
+part 'app_user.g.dart'; // Файл будет сгенерирован автоматически
+
+@HiveType(typeId: 0) // Уникальный ID для типа
 class AppUser {
-  String username;
-  String email;
-  List<Project> projects;
-  List<dynamic> progressHistory;
+  @HiveField(0)
+  final String username;
+
+  @HiveField(1)
+  final String email;
+
+  @HiveField(2)
+  final List<Project> projects;
+
+  @HiveField(3)
+  final List<dynamic> progressHistory;
+
+// ... остальной код класса без изменений ...
 
   AppUser({
     required this.username,
