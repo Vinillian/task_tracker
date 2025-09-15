@@ -6,15 +6,20 @@ class Project {
 
   Project({required this.name, required this.tasks});
 
-  Map<String, dynamic> toJson() => {
-    'name': name,
-    'tasks': tasks.map((t) => t.toJson()).toList(),
-  };
+  Map<String, dynamic> toFirestore() {
+    return {
+      'name': name,
+      'tasks': tasks.map((t) => t.toFirestore()).toList(),
+    };
+  }
 
-  factory Project.fromJson(Map<String, dynamic> json) {
+  static Project fromFirestore(Map<String, dynamic> data) {
     return Project(
-      name: json['name'],
-      tasks: (json['tasks'] as List).map((t) => Task.fromJson(t)).toList(),
+      name: data['name'] ?? '',
+      tasks: (data['tasks'] as List<dynamic>?)
+          ?.map((t) => Task.fromFirestore(t))
+          .toList() ??
+          [],
     );
   }
 }

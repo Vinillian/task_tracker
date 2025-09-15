@@ -1,25 +1,27 @@
 class Subtask {
   String name;
-  int totalSteps;
   int completedSteps;
+  int totalSteps;
 
   Subtask({
     required this.name,
+    this.completedSteps = 0,
     required this.totalSteps,
-    required this.completedSteps,
   });
 
-  Map<String, dynamic> toJson() => {
-    'name': name,
-    'totalSteps': totalSteps,
-    'completedSteps': completedSteps,
-  };
+  Map<String, dynamic> toFirestore() {
+    return {
+      'name': name,
+      'completedSteps': completedSteps,
+      'totalSteps': totalSteps,
+    };
+  }
 
-  factory Subtask.fromJson(Map<String, dynamic> json) {
+  static Subtask fromFirestore(Map<String, dynamic> data) {
     return Subtask(
-      name: json['name'],
-      totalSteps: json['totalSteps'],
-      completedSteps: json['completedSteps'],
+      name: data['name'] ?? '',
+      completedSteps: data['completedSteps'] ?? 0,
+      totalSteps: data['totalSteps'] ?? 1,
     );
   }
 }
