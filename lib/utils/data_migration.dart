@@ -18,7 +18,7 @@ class DataMigration {
     }
 
     if (needsMigration) {
-      print('Миграция данных пользователя ${user.name}...');
+      print('Миграция данных пользователя ${user.username}...');
 
       // Просто сохраняем пользователя - toFirestore() сделает миграцию
       await service.saveUser(user, uid);

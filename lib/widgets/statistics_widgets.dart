@@ -39,7 +39,7 @@ class StatisticsWidgets {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            GitHubCalendar(userName: user.name),
+            GitHubCalendar(),
             const SizedBox(height: 24),
             Text('Общая статистика',
                 style: Theme.of(context).textTheme.titleLarge),

@@ -186,25 +186,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     }
   }
 
-  void _addProgressHistory(String itemName, int steps, String itemType) {
-    if (widget.project.name.isEmpty) return;
-
-    final now = DateTime.now();
-    final historyEntry = {
-      'date': Timestamp.fromDate(now),
-      'itemName': itemName,
-      'stepsAdded': steps,
-      'itemType': itemType,
-    };
-
-    // Нужно передать это обратно в главный экран для сохранения
-    // Пока просто сохраним локально для теста
-    print('Added to history: $historyEntry');
-
-    // Для теста: обновим UI чтобы видеть изменения
-    setState(() {});
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(

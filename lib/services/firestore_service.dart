@@ -9,31 +9,38 @@ class FirestoreService {
   // Сохранить пользователя по UID
   Future<void> saveUser(AppUser user, String uid) async {
     try {
-      final userData = {
-        'name': user.name,
-        'projects': user.projects.map((p) => p.toFirestore()).toList(),
-        'progressHistory': user.progressHistory,
-      };
+      // Используем метод toFirestore() из модели AppUser
+      final userData = user.toFirestore();
 
       await _usersRef.doc(uid).set(userData, SetOptions(merge: true));
-      print('User ${user.name} saved successfully to Firestore with UID: $uid');
+      print('✅ Пользователь ${user.username} сохранен в Firestore (UID: $uid)');
+      print('📊 Данные: ${userData.toString()}');
     } catch (e) {
-      print('Error saving user to Firestore: $e');
+      print('❌ Ошибка сохранения пользователя: $e');
       rethrow;
     }
   }
 
   // Получить документ пользователя по UID
   Future<DocumentSnapshot> getUserDocument(String uid) async {
-    return await _usersRef.doc(uid).get();
+    try {
+      final doc = await _usersRef.doc(uid).get();
+      print('📄 Загружен документ пользователя: ${doc.exists ? "существует" : "не существует"}');
+      return doc;
+    } catch (e) {
+      print('❌ Ошибка загрузки документа: $e');
+      rethrow;
+    }
   }
 
   // Stream для конкретного пользователя по UID
   Stream<AppUser?> userStream(String uid) {
     return _usersRef.doc(uid).snapshots().map((snapshot) {
       if (snapshot.exists) {
+        print('🔄 Stream: данные пользователя обновлены');
         return AppUser.fromFirestore(snapshot.data() as Map<String, dynamic>);
       }
+      print('🔄 Stream: документ не существует');
       return null;
     });
   }
@@ -42,14 +49,14 @@ class FirestoreService {
   Future<void> deleteUser(String uid) async {
     try {
       await _usersRef.doc(uid).delete();
-      print('User with UID: $uid deleted from Firestore');
+      print('Пользователь с UID: $uid удален из Firestore');
     } catch (e) {
-      print('Error deleting user: $e');
+      print('Ошибка удаления пользователя: $e');
       rethrow;
     }
   }
 
-  // Старый метод для обратной совместимости (можно удалить позже)
+  // Старый метод для обратной совместимости
   Stream<List<AppUser>> usersStream() {
     return _usersRef.snapshots().map((snapshot) {
       return snapshot.docs

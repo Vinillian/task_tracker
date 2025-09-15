@@ -4,20 +4,26 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../models/app_user.dart';
 import '../services/firestore_service.dart';
+import '../services/auth_service.dart';
+import '../models/progress_history.dart';
 
 class GitHubCalendar extends StatelessWidget {
-  final String? userName;
-  const GitHubCalendar({super.key, required this.userName});
+  const GitHubCalendar({super.key});
 
   static const double _cellSize = 12;
   static const double _cellMargin = 2;
   static const double _columnWidth = _cellSize + _cellMargin * 2;
 
   Stream<AppUser?> _userStream(BuildContext context) {
+    final authService = Provider.of<AuthService>(context, listen: false);
     final firestoreService = Provider.of<FirestoreService>(context, listen: false);
-    return firestoreService.usersStream().map((users) {
-      return users.firstWhere((user) => user.name == userName, orElse: () => AppUser.empty());
-    });
+
+    final currentUid = authService.currentUser?.uid;
+    if (currentUid == null) {
+      return Stream.value(null);
+    }
+
+    return firestoreService.userStream(currentUid);
   }
 
   Map<DateTime, int> _buildContributions(List<dynamic> progressHistory) {
@@ -25,37 +31,40 @@ class GitHubCalendar extends StatelessWidget {
     final start = DateTime(now.year - 1, now.month, now.day);
     final map = <DateTime, int>{};
 
+    // Initialize all dates with 0 contributions
     for (var d = start; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
       map[DateTime(d.year, d.month, d.day)] = 0;
     }
 
     if (progressHistory.isEmpty) return map;
 
-    for (final historyData in progressHistory) {
+    for (final historyItem in progressHistory) {
       try {
-        Map<String, dynamic> historyMap;
-        if (historyData is Map<String, dynamic>) {
-          historyMap = historyData;
-        } else {
-          continue;
-        }
-
-        final dynamic dateData = historyMap['date'];
-        final dynamic stepsData = historyMap['stepsAdded'];
-
         DateTime date;
         int steps = 0;
 
-        if (stepsData is int) {
-          steps = stepsData;
-        } else if (stepsData is String) {
-          steps = int.tryParse(stepsData) ?? 0;
-        }
+        if (historyItem is ProgressHistory) {
+          // Handle ProgressHistory objects
+          date = historyItem.date;
+          steps = historyItem.stepsAdded;
+        } else if (historyItem is Map<String, dynamic>) {
+          // Handle Map data (from Firestore)
+          final dynamic dateData = historyItem['date'];
+          final dynamic stepsData = historyItem['stepsAdded'];
 
-        if (dateData is Timestamp) {
-          date = dateData.toDate();
-        } else if (dateData is String) {
-          date = DateTime.parse(dateData);
+          if (stepsData is int) {
+            steps = stepsData;
+          } else if (stepsData is String) {
+            steps = int.tryParse(stepsData) ?? 0;
+          }
+
+          if (dateData is Timestamp) {
+            date = dateData.toDate();
+          } else if (dateData is String) {
+            date = DateTime.parse(dateData);
+          } else {
+            continue;
+          }
         } else {
           continue;
         }
@@ -65,6 +74,7 @@ class GitHubCalendar extends StatelessWidget {
           map[normalizedDate] = map[normalizedDate]! + steps;
         }
       } catch (e) {
+        print('Ошибка обработки записи истории: $e');
         continue;
       }
     }
@@ -201,12 +211,21 @@ class GitHubCalendar extends StatelessWidget {
         }
 
         final user = snapshot.data;
-        if (user == null || user.name.isEmpty) {
+        if (user == null) {
+          return const Center(child: Text('Данные пользователя загружаются...'));
+        }
+
+        if (user.username.isEmpty) {
           return const Center(child: Text('Пользователь не найден'));
         }
 
         final contributions = _buildContributions(user.progressHistory);
         final weeks = _weeks(contributions);
+
+        if (weeks.isEmpty) {
+          return const Center(child: Text('Нет данных для отображения'));
+        }
+
         final scrollPosition = _calculateScrollPosition(weeks);
         final scrollController = ScrollController(initialScrollOffset: scrollPosition);
 
@@ -219,73 +238,69 @@ class GitHubCalendar extends StatelessWidget {
                 const SizedBox(height: 4),
                 const Text('Календарь активности', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-
-                if (weeks.isEmpty)
-                  const Text('Нет данных для отображения', style: TextStyle(color: Colors.grey))
-                else
-                  Scrollbar(
+                Scrollbar(
+                  controller: scrollController,
+                  thumbVisibility: true,
+                  thickness: 6,
+                  radius: const Radius.circular(3),
+                  child: SingleChildScrollView(
                     controller: scrollController,
-                    thumbVisibility: true,
-                    thickness: 6,
-                    radius: const Radius.circular(3),
-                    child: SingleChildScrollView(
-                      controller: scrollController,
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Column(
-                            children: [
-                              const SizedBox(height: 18),
-                              for (final day in ['Пн','','Ср','','Пт','','Вс'])
-                                SizedBox(
-                                    height: _cellSize + _cellMargin * 2,
-                                    width: 24,
-                                    child: Center(child: Text(day, style: const TextStyle(fontSize: 9, color: Colors.black54)))
-                                ),
-                            ],
-                          ),
-                          const SizedBox(width: 8),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _monthHeaders(weeks),
-                              const SizedBox(height: 4),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: weeks.map((week) {
-                                  return SizedBox(
-                                    width: _columnWidth,
-                                    child: Column(
-                                      children: List.generate(7, (i) {
-                                        if (i >= week.length) return const SizedBox();
-                                        final date = week[i];
-                                        final count = contributions[DateTime(date.year, date.month, date.day)] ?? 0;
-                                        final color = _colorForCount(count);
-                                        final isToday = _isToday(date);
-
-                                        return Container(
-                                          width: _cellSize, height: _cellSize, margin: const EdgeInsets.all(_cellMargin),
-                                          decoration: BoxDecoration(
-                                            color: color, borderRadius: BorderRadius.circular(2),
-                                            border: Border.all(color: isToday ? Colors.blue.withOpacity(0.8) : const Color(0x11000000), width: isToday ? 1.5 : 1),
-                                          ),
-                                          child: Tooltip(
-                                            message: '${DateFormat('dd MMM yyyy').format(date)}\n$count шагов${isToday ? ' (сегодня)' : ''}',
-                                            child: const SizedBox.expand(),
-                                          ),
-                                        );
-                                      }),
-                                    ),
-                                  );
-                                }).toList(),
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Column(
+                          children: [
+                            const SizedBox(height: 18),
+                            for (final day in ['Пн','','Ср','','Пт','','Вс'])
+                              SizedBox(
+                                  height: _cellSize + _cellMargin * 2,
+                                  width: 24,
+                                  child: Center(child: Text(day, style: const TextStyle(fontSize: 9, color: Colors.black54)))
                               ),
-                            ],
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _monthHeaders(weeks),
+                            const SizedBox(height: 4),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: weeks.map((week) {
+                                return SizedBox(
+                                  width: _columnWidth,
+                                  child: Column(
+                                    children: List.generate(7, (i) {
+                                      if (i >= week.length) return const SizedBox();
+                                      final date = week[i];
+                                      final count = contributions[DateTime(date.year, date.month, date.day)] ?? 0;
+                                      final color = _colorForCount(count);
+                                      final isToday = _isToday(date);
+
+                                      return Container(
+                                        width: _cellSize, height: _cellSize, margin: const EdgeInsets.all(_cellMargin),
+                                        decoration: BoxDecoration(
+                                          color: color, borderRadius: BorderRadius.circular(2),
+                                          border: Border.all(color: isToday ? Colors.blue.withOpacity(0.8) : const Color(0x11000000), width: isToday ? 1.5 : 1),
+                                        ),
+                                        child: Tooltip(
+                                          message: '${DateFormat('dd MMM yyyy').format(date)}\n$count шагов${isToday ? ' (сегодня)' : ''}',
+                                          child: const SizedBox.expand(),
+                                        ),
+                                      );
+                                    }),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
+                ),
 
                 const SizedBox(height: 12),
                 _buildTodayStats(contributions),
@@ -314,15 +329,19 @@ class GitHubCalendar extends StatelessWidget {
       },
     );
   }
+
   void _checkDataFormat(AppUser user) {
-    print('=== ПРОВЕРКА ФОРМАТА ДАННЫХ ===');
-    print('Пользователь: ${user.name}');
+    print('=== ПРОВЕРКА ФОРМАТА ДАННЫХ ДЛЯ КАЛЕНДАРЯ ===');
+    print('Пользователь: ${user.username}');
     print('Записей в истории: ${user.progressHistory.length}');
 
     for (int i = 0; i < user.progressHistory.length; i++) {
       final item = user.progressHistory[i];
       print('Элемент $i тип: ${item.runtimeType}');
+      if (item is ProgressHistory) {
+        print('   Дата: ${item.date}, Шаги: ${item.stepsAdded}');
+      }
     }
-    print('================================');
+    print('============================================');
   }
 }
