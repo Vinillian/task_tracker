@@ -23,11 +23,37 @@ class ProjectListScreen extends StatelessWidget {
 
   void _saveCurrentUser() {
     if (currentUser == null) return;
-
-    print('💾 Сохранение пользователя: ${currentUser!.username}');
-    print('📊 Проектов: ${currentUser!.projects.length}');
-
     onUserChanged(currentUser);
+  }
+
+  // Новый метод для отображения прогресса проекта
+  Widget _buildProjectProgress(Project project) {
+    int completed = 0;
+    int total = project.tasks.length;
+
+    for (var task in project.tasks) {
+      if (task.completedSteps >= task.totalSteps) completed++;
+    }
+
+    double progress = total > 0 ? completed / total : 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LinearProgressIndicator(
+          value: progress,
+          backgroundColor: Colors.grey.shade200,
+          color: progress > 0.7 ? Colors.green : progress > 0.3 ? Colors.orange : Colors.red,
+          minHeight: 6,
+          borderRadius: BorderRadius.circular(3),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${(progress * 100).toInt()}% завершено',
+          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+        ),
+      ],
+    );
   }
 
   @override
@@ -62,14 +88,34 @@ class ProjectListScreen extends StatelessWidget {
         final project = currentUser!.projects[index];
 
         return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: ListTile(
-            leading: const Icon(Icons.folder, color: Colors.blue),
+            leading: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.folder, color: Colors.blue.shade700),
+            ),
             title: Text(
               project.name,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
             ),
-            subtitle: Text('Задач: ${project.tasks.length}'),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 4),
+                Text('${project.tasks.length} задач', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+                if (project.tasks.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  _buildProjectProgress(project),
+                ],
+              ],
+            ),
             onTap: () {
               Navigator.push(
                 context,
@@ -96,7 +142,7 @@ class ProjectListScreen extends StatelessWidget {
               );
             },
             trailing: IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
+              icon: Icon(Icons.delete, color: Colors.red.shade600),
               onPressed: () async {
                 final confirm = await Dialogs.showConfirmDialog(
                   context: context,
@@ -109,6 +155,7 @@ class ProjectListScreen extends StatelessWidget {
                 }
               },
             ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
         );
       },

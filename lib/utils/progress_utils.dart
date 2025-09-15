@@ -10,11 +10,11 @@ class ProgressUtils {
   /// Выбор цвета задачи по прогрессу
   static Color getTaskColor(double progress) {
     if (progress <= 0.3) {
-      return Colors.red.shade100;
+      return Colors.red;
     } else if (progress <= 0.7) {
-      return Colors.yellow.shade100;
+      return Colors.orange;
     } else {
-      return Colors.green.shade100;
+      return Colors.green;
     }
   }
 
@@ -37,7 +37,7 @@ class ProgressUtils {
                 color: value <= 0.3
                     ? Colors.red
                     : value <= 0.7
-                    ? Colors.yellow
+                    ? Colors.orange
                     : Colors.green,
                 borderRadius: BorderRadius.circular(4),
               ),
