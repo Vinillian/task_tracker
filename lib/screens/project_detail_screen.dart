@@ -6,6 +6,7 @@ import '../services/firestore_service.dart';
 import '../services/task_service.dart';
 import '../widgets/dialogs.dart';
 import '../utils/progress_utils.dart';
+import '../widgets/task_edit_dialog.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final Project project;
@@ -69,51 +70,36 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     }
   }
 
+  // В методе _addTask заменить вызов Dialogs.showTextInputDialog на:
   void _addTask() async {
-    final name = await Dialogs.showTextInputDialog(
+    final task = await showDialog<Task>(
       context: context,
-      title: 'Новая задача',
-      initialValue: '',
+      builder: (context) => TaskEditDialog(
+        onSave: (newTask) {
+          setState(() {
+            widget.project.tasks.add(newTask);
+          });
+          widget.onProjectUpdated(widget.project);
+        },
+      ),
     );
-    if (name != null && name.isNotEmpty) {
-      final steps = await Dialogs.showNumberInputDialog(
-        context: context,
-        title: 'Количество шагов для "$name"',
-        message: 'Введите общее количество шагов для задачи',
-      );
-
-      if (steps != null && steps > 0) {
-        setState(() {
-          widget.project.tasks.add(TaskService.createTask(name, steps));
-        });
-        widget.onProjectUpdated(widget.project);
-      }
-    }
   }
 
+  // В методе _editTask заменить вызов Dialogs.showTextInputDialog на:
   void _editTask(Task task) async {
-    final name = await Dialogs.showTextInputDialog(
+    final updatedTask = await showDialog<Task>(
       context: context,
-      title: 'Редактировать задачу',
-      initialValue: task.name,
+      builder: (context) => TaskEditDialog(
+        initialTask: task,
+        onSave: (newTask) {
+          setState(() {
+            final taskIndex = widget.project.tasks.indexOf(task);
+            widget.project.tasks[taskIndex] = newTask;
+          });
+          widget.onProjectUpdated(widget.project);
+        },
+      ),
     );
-
-    if (name != null && name.isNotEmpty) {
-      final steps = await Dialogs.showNumberInputDialog(
-        context: context,
-        title: 'Количество шагов для "$name"',
-        message: 'Текущее количество: ${task.totalSteps}',
-        initialValue: task.totalSteps.toString(),
-      );
-
-      if (steps != null && steps > 0) {
-        setState(() {
-          final taskIndex = widget.project.tasks.indexOf(task);
-          widget.project.tasks[taskIndex] = TaskService.updateTask(task, name, steps);
-        });
-        widget.onProjectUpdated(widget.project);
-      }
-    }
   }
 
   void _deleteTask(Task task) async {

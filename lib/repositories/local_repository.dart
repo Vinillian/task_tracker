@@ -48,6 +48,7 @@ class LocalRepository {
         Hive.registerAdapter(ProgressHistoryAdapter());
       }
 
+
       // Открываем боксы
       _userBox = await Hive.openBox<AppUser>(_userBoxName);
       _settingsBox = await Hive.openBox(_settingsBoxName);
