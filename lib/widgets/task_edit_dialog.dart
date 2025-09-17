@@ -21,7 +21,7 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _stepsController = TextEditingController();
-  TaskType _selectedType = TaskType.stepByStep;
+  String _selectedTaskType = 'stepByStep'; // ← единое имя
   Recurrence? _recurrence;
   DateTime? _dueDate;
 
@@ -32,7 +32,7 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
       _nameController.text = widget.initialTask!.name;
       _descriptionController.text = widget.initialTask!.description ?? '';
       _stepsController.text = widget.initialTask!.totalSteps.toString();
-      _selectedType = widget.initialTask!.taskType;
+      _selectedTaskType = widget.initialTask!.taskType; // ← строка
       _recurrence = widget.initialTask!.recurrence;
       _dueDate = widget.initialTask!.dueDate;
     } else {
@@ -43,53 +43,50 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.initialTask == null ? 'Новая задача' : 'Редактировать задачу'),
+      title: Text(widget.initialTask == null ? "Создать задачу" : "Редактировать задачу"),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
+            TextFormField(
               controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Название задачи'),
+              decoration: const InputDecoration(labelText: "Название задачи"),
             ),
-            TextField(
-              controller: _descriptionController,
-              decoration: const InputDecoration(labelText: 'Описание (необязательно)'),
-              maxLines: 3,
-            ),
-            DropdownButtonFormField<TaskType>(
-              value: _selectedType,
-              items: TaskType.values.map((type) {
-                return DropdownMenuItem(
-                  value: type,
-                  child: Text(type.displayName),
-                );
-              }).toList(),
-              onChanged: (value) {
+            DropdownButtonFormField<String>(
+              value: _selectedTaskType,
+              items: const [
+                DropdownMenuItem(value: "singleStep", child: Text("Одиночная")),
+                DropdownMenuItem(value: "stepByStep", child: Text("Пошаговая")),
+              ],
+              onChanged: (val) {
                 setState(() {
-                  _selectedType = value!;
+                  _selectedTaskType = val!;
                 });
               },
-              decoration: const InputDecoration(labelText: 'Тип задачи'),
+              decoration: const InputDecoration(labelText: "Тип задачи"),
             ),
-            if (_selectedType == TaskType.stepByStep)
-              TextField(
+            if (_selectedTaskType == "stepByStep")
+              TextFormField(
                 controller: _stepsController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Количество шагов'),
+                decoration: const InputDecoration(labelText: "Количество шагов"),
               ),
-            // TODO: Добавить выбор периодичности и даты выполнения
+            TextFormField(
+              controller: _descriptionController,
+              decoration: const InputDecoration(labelText: "Описание"),
+              maxLines: 2,
+            ),
           ],
         ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Отмена'),
+          child: const Text("Отмена"),
         ),
-        TextButton(
+        ElevatedButton(
           onPressed: _saveTask,
-          child: const Text('Сохранить'),
+          child: const Text("Сохранить"),
         ),
       ],
     );
@@ -99,19 +96,22 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
 
-    final steps = int.tryParse(_stepsController.text) ?? 1;
+    final steps = _selectedTaskType == "stepByStep"
+        ? (int.tryParse(_stepsController.text) ?? 1)
+        : 1;
 
     final task = Task(
       name: name,
       totalSteps: steps,
       completedSteps: widget.initialTask?.completedSteps ?? 0,
       subtasks: widget.initialTask?.subtasks ?? [],
-      taskType: _selectedType,
+      taskType: _selectedTaskType,
       recurrence: _recurrence,
       dueDate: _dueDate,
       description: _descriptionController.text.isEmpty
           ? null
           : _descriptionController.text,
+      isCompleted: widget.initialTask?.isCompleted ?? false,
     );
 
     widget.onSave(task);

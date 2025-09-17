@@ -202,28 +202,48 @@ class GitHubCalendar extends StatelessWidget {
     return StreamBuilder<AppUser?>(
       stream: _userStream(context),
       builder: (context, snapshot) {
-        if (snapshot.hasData && snapshot.data != null) {
-          _checkDataFormat(snapshot.data!);
-        }
-
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
         final user = snapshot.data;
-        if (user == null) {
-          return const Center(child: Text('Данные пользователя загружаются...'));
-        }
 
-        if (user.username.isEmpty) {
-          return const Center(child: Text('Пользователь не найден'));
+        // Улучшенная проверка данных пользователя
+        if (user == null || user.username.isEmpty || user.email.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.calendar_today, size: 48, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('Данные пользователя загружаются...',
+                    style: TextStyle(fontSize: 16)),
+                SizedBox(height: 8),
+                Text('Создайте задачи для отображения активности',
+                    style: TextStyle(fontSize: 14, color: Colors.grey)),
+              ],
+            ),
+          );
         }
 
         final contributions = _buildContributions(user.progressHistory);
         final weeks = _weeks(contributions);
 
-        if (weeks.isEmpty) {
-          return const Center(child: Text('Нет данных для отображения'));
+        if (weeks.isEmpty || user.progressHistory.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.emoji_events, size: 48, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('Нет данных для отображения',
+                    style: TextStyle(fontSize: 16)),
+                SizedBox(height: 8),
+                Text('Начните добавлять прогресс к задачам',
+                    style: TextStyle(fontSize: 14, color: Colors.grey)),
+              ],
+            ),
+          );
         }
 
         final scrollPosition = _calculateScrollPosition(weeks);

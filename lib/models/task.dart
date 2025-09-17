@@ -20,7 +20,7 @@ class Task {
   final List<Subtask> subtasks;
 
   @HiveField(4)
-  final TaskType taskType;
+  final String taskType; // Используйте String вместо TaskType
 
   @HiveField(5)
   final Recurrence? recurrence;
@@ -34,12 +34,13 @@ class Task {
   @HiveField(8)
   final String? description;
 
+  // В конструкторе:
   Task({
     required this.name,
     this.completedSteps = 0,
     required this.totalSteps,
     List<Subtask>? subtasks,
-    this.taskType = TaskType.stepByStep,
+    this.taskType = 'stepByStep', // Используйте строки
     this.recurrence,
     this.dueDate,
     this.isCompleted = false,
@@ -52,7 +53,7 @@ class Task {
       'completedSteps': completedSteps,
       'totalSteps': totalSteps,
       'subtasks': subtasks.map((s) => s.toFirestore()).toList(),
-      'taskType': taskType.toString(),
+      'taskType': taskType.toString(), // ← Используйте toString()
       'recurrence': recurrence?.toMap(),
       'dueDate': dueDate?.toIso8601String(),
       'isCompleted': isCompleted,
@@ -60,6 +61,7 @@ class Task {
     };
   }
 
+  // В fromFirestore просто возвращаем строку
   static Task fromFirestore(Map<String, dynamic> data) {
     return Task(
       name: data['name'] ?? '',
@@ -68,7 +70,7 @@ class Task {
       subtasks: (data['subtasks'] as List<dynamic>?)
           ?.map((s) => Subtask.fromFirestore(s))
           .toList() ?? [],
-      taskType: TaskType.fromString(data['taskType'] ?? 'stepByStep'),
+      taskType: data['taskType'] ?? 'stepByStep', // ← Просто возвращаем строку
       recurrence: data['recurrence'] != null
           ? Recurrence.fromMap(data['recurrence'])
           : null,

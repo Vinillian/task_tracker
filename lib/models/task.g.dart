@@ -21,7 +21,7 @@ class TaskAdapter extends TypeAdapter<Task> {
       completedSteps: fields[1] as int,
       totalSteps: fields[2] as int,
       subtasks: (fields[3] as List?)?.cast<Subtask>(),
-      taskType: fields[4] as TaskType,
+      taskType: fields[4] as String,
       recurrence: fields[5] as Recurrence?,
       dueDate: fields[6] as DateTime?,
       isCompleted: fields[7] as bool,

@@ -42,54 +42,59 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
   }
 
   // Изменяем метод чтобы возвращал Future<void>
+  // Изменяем метод чтобы возвращал Future<void>
   Future<void> _loadUserData() async {
     print('📥 Загрузка данных пользователя...');
     final localRepo = Provider.of<LocalRepository>(context, listen: false);
 
-    final localUser = localRepo.loadUser();
-    if (localUser != null && localUser.projects.isNotEmpty) {
-      print('✅ Используем локальные данные из Hive');
-      if (mounted) {
-        setState(() => currentUser = localUser);
+    try {
+      final localUser = localRepo.loadUser();
+      if (localUser != null && localUser.username.isNotEmpty) {
+        print('✅ Используем локальные данные из Hive');
+        if (mounted) {
+          setState(() => currentUser = localUser);
+        }
+        return;
       }
-      return;
-    }
 
-    final authService = Provider.of<AuthService>(context, listen: false);
-    final currentAuthUser = authService.currentUser;
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final currentAuthUser = authService.currentUser;
 
-    if (currentAuthUser != null) {
-      try {
-        print('🔍 Загрузка данных пользователя из Firestore...');
-        final userDoc = await _firestoreService.getUserDocument(currentAuthUser.uid);
+      if (currentAuthUser != null) {
+        try {
+          print('🔍 Загрузка данных пользователя из Firestore...');
+          final userDoc = await _firestoreService.getUserDocument(currentAuthUser.uid);
 
-        if (userDoc.exists) {
-          final userData = userDoc.data() as Map<String, dynamic>;
-          final firestoreUser = AppUser.fromFirestore(userData);
+          if (userDoc.exists) {
+            final userData = userDoc.data() as Map<String, dynamic>;
+            final firestoreUser = AppUser.fromFirestore(userData);
 
+            if (mounted) {
+              setState(() {
+                currentUser = firestoreUser;
+              });
+            }
+
+            await localRepo.saveUser(firestoreUser);
+            print('✅ Данные сохранены в Hive');
+
+            if (firestoreUser.projects.isEmpty) {
+              print('ℹ️ Пользователь существует, но проекты отсутствуют');
+            }
+          } else {
+            print('ℹ️ Документ пользователя не существует в Firestore');
+          }
+        } catch (e) {
+          print('❌ Ошибка загрузки пользователя: $e');
           if (mounted) {
             setState(() {
-              currentUser = firestoreUser;
+              currentUser = AppUser.empty();
             });
           }
-
-          await localRepo.saveUser(firestoreUser);
-          print('✅ Данные сохранены в Hive');
-
-          if (firestoreUser.projects.isEmpty) {
-            print('ℹ️ Пользователь существует, но проекты отсутствуют');
-          }
-        } else {
-          print('ℹ️ Документ пользователя не существует в Firestore');
-        }
-      } catch (e) {
-        print('❌ Ошибка загрузки пользователя: $e');
-        if (mounted) {
-          setState(() {
-            currentUser = AppUser.empty();
-          });
         }
       }
+    } catch (e) {
+      print('❌ Неожиданная ошибка в _loadUserData: $e');
     }
   }
 
@@ -97,37 +102,56 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
   void _saveCurrentUser() {
     if (currentUser == null) return;
 
-    final localRepo = Provider.of<LocalRepository>(context, listen: false);
-    localRepo.saveUser(currentUser!);
-    print('✅ Данные сохранены в Hive');
-
     final authService = Provider.of<AuthService>(context, listen: false);
     final currentAuthUser = authService.currentUser;
 
-    if (currentAuthUser != null && currentUser != null) {
+    if (currentAuthUser == null) return;
+
+    // Если данные пустые, заполняем их из аутентификации
+    if (currentUser!.username.isEmpty || currentUser!.email.isEmpty) {
+      print('⚠️ Заполняем пустые данные пользователя из аутентификации');
       setState(() {
-        _saveMessage = 'Сохранение...';
-      });
-
-      print('💾 Сохранение пользователя в Firestore: ${currentUser!.username}');
-
-      _firestoreService.saveUser(currentUser!, currentAuthUser.uid).then((_) {
-        setState(() {
-          _saveMessage = 'Данные сохранены ✅';
-        });
-        Future.delayed(const Duration(seconds: 2), () {
-          setState(() {
-            _saveMessage = null;
-          });
-        });
-        print('✅ Данные успешно сохранены в Firestore');
-      }).catchError((error) {
-        setState(() {
-          _saveMessage = 'Ошибка сохранения: $error';
-        });
-        print('❌ Ошибка сохранения в Firestore: $error');
+        currentUser = AppUser(
+          username: currentAuthUser.email?.split('@').first ?? 'User',
+          email: currentAuthUser.email ?? '',
+          projects: currentUser?.projects ?? [],
+          progressHistory: currentUser?.progressHistory ?? [],
+        );
       });
     }
+
+    final localRepo = Provider.of<LocalRepository>(context, listen: false);
+
+    try {
+      localRepo.saveUser(currentUser!);
+      print('✅ Данные сохранены в Hive: ${currentUser!.username}');
+    } catch (e) {
+      print('❌ Ошибка сохранения в Hive: $e');
+      return;
+    }
+
+    setState(() {
+      _saveMessage = 'Сохранение...';
+    });
+
+    print('💾 Сохранение пользователя в Firestore: ${currentUser!.username}');
+
+    _firestoreService.saveUser(currentUser!, currentAuthUser.uid).then((_) {
+      setState(() {
+        _saveMessage = 'Данные сохранены ✅';
+      });
+      Future.delayed(const Duration(seconds: 2), () {
+        setState(() {
+          _saveMessage = null;
+        });
+      });
+      print('✅ Данные успешно сохранены в Firestore');
+    }).catchError((error) {
+      setState(() {
+        _saveMessage = 'Ошибка сохранения: $error';
+      });
+      print('❌ Ошибка сохранения в Firestore: $error');
+    });
   }
 
   void _addProgressHistory(String itemName, int stepsAdded, String itemType) {

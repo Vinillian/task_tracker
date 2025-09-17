@@ -20,19 +20,25 @@ class SubtaskAdapter extends TypeAdapter<Subtask> {
       name: fields[0] as String,
       completedSteps: fields[1] as int,
       totalSteps: fields[2] as int,
+      subtaskType: fields[3] as String,
+      isCompleted: fields[4] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, Subtask obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
       ..write(obj.completedSteps)
       ..writeByte(2)
-      ..write(obj.totalSteps);
+      ..write(obj.totalSteps)
+      ..writeByte(3)
+      ..write(obj.subtaskType)
+      ..writeByte(4)
+      ..write(obj.isCompleted);
   }
 
   @override

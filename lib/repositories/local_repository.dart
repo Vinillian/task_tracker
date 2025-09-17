@@ -47,6 +47,9 @@ class LocalRepository {
       if (!Hive.isAdapterRegistered(4)) {
         Hive.registerAdapter(ProgressHistoryAdapter());
       }
+      //if (!Hive.isAdapterRegistered(5)) {
+      //  Hive.registerAdapter(RecurrenceAdapter());
+      //}
 
 
       // Открываем боксы
@@ -64,7 +67,13 @@ class LocalRepository {
 
   // Сохранение пользователя
   Future<void> saveUser(AppUser user) async {
-    await _userBox.put('currentUser', user);
+    try {
+      await _userBox.put('currentUser', user);
+      print('✅ Пользователь сохранен в Hive: ${user.username}');
+    } catch (e) {
+      print('❌ Ошибка сохранения в Hive: $e');
+      rethrow;
+    }
   }
 
   // Загрузка пользователя

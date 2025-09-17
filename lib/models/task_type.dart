@@ -1,13 +1,13 @@
 enum TaskType {
   stepByStep,
-  checkbox;
+  singleStep;
 
   static TaskType fromString(String value) {
     switch (value) {
       case 'stepByStep':
         return TaskType.stepByStep;
-      case 'checkbox':
-        return TaskType.checkbox;
+      case 'singleStep':
+        return TaskType.singleStep;
       default:
         return TaskType.stepByStep;
     }
@@ -18,17 +18,26 @@ enum TaskType {
     switch (this) {
       case TaskType.stepByStep:
         return 'stepByStep';
-      case TaskType.checkbox:
-        return 'checkbox';
+      case TaskType.singleStep:
+        return 'singleStep';
     }
   }
 
   String get displayName {
     switch (this) {
       case TaskType.stepByStep:
-        return 'Пошаговое выполнение';
-      case TaskType.checkbox:
-        return 'Чекбокс';
+        return 'Пошаговая';
+      case TaskType.singleStep:
+        return 'Единовременная';
+    }
+  }
+
+  String get description {
+    switch (this) {
+      case TaskType.stepByStep:
+        return 'Задача выполняется постепенно через несколько шагов';
+      case TaskType.singleStep:
+        return 'Задача выполняется одним действием (чекбокс)';
     }
   }
 }

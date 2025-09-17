@@ -30,6 +30,7 @@ class AppUser {
 
   // В models/app_user.dart
   Map<String, dynamic> toFirestore() {
+    // Добавьте проверки на null и пустые значения
     final migratedHistory = progressHistory.map((item) {
       if (item is ProgressHistory) {
         return item.toFirestore();
@@ -38,9 +39,9 @@ class AppUser {
     }).toList();
 
     return {
-      'username': username,
-      'email': email,
-      'projects': projects.map((p) => p.toFirestore()).toList(),
+      'username': username ?? '',
+      'email': email ?? '',
+      'projects': projects?.map((p) => p.toFirestore()).toList() ?? [],
       'progressHistory': migratedHistory,
     };
   }

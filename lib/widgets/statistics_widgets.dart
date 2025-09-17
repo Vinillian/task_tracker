@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/app_user.dart';
+import '../models/task_type.dart'; // ← ДОБАВИТЬ импорт
 import '../utils/progress_utils.dart';
 import 'github_calendar.dart';
 
@@ -17,19 +18,31 @@ class StatisticsWidgets {
     for (var project in user.projects) {
       for (var task in project.tasks) {
         totalTasks += 1;
-        totalSteps += task.totalSteps;
-        completedSteps += task.completedSteps;
 
-        if (task.completedSteps >= task.totalSteps) {
-          completedTasks += 1;
+        // Учитываем оба типа задач
+        if (task.taskType == TaskType.stepByStep) {
+          totalSteps += task.totalSteps;
+          completedSteps += task.completedSteps;
+
+          if (task.completedSteps >= task.totalSteps) {
+            completedTasks += 1;
+          }
+        } else {
+          // Для единовременных задач
+          totalSteps += 1;
+          if (task.isCompleted) {
+            completedSteps += 1;
+            completedTasks += 1;
+          }
         }
 
+        // Обработка подзадач
         for (var subtask in task.subtasks) {
           totalSteps += subtask.totalSteps;
           completedSteps += subtask.completedSteps;
         }
       }
-    }
+    } // ← ДОБАВИТЬ закрывающую скобку
 
     double taskProgress = totalTasks > 0 ? completedTasks / totalTasks : 0.0;
     double stepsProgress = totalSteps > 0 ? completedSteps / totalSteps : 0.0;
@@ -80,9 +93,19 @@ class StatisticsWidgets {
             ...user.projects.map((project) {
               double projectProgress = 0.0;
               int projectTasks = project.tasks.length;
-              int completedProjectTasks = project.tasks
-                  .where((t) => t.completedSteps >= t.totalSteps)
-                  .length;
+              int completedProjectTasks = 0;
+
+              for (var task in project.tasks) {
+                if (task.taskType == TaskType.stepByStep) {
+                  // Замените проверки taskType на строковые
+                  if (task.taskType == 'stepByStep') {
+                    // обработка пошаговых задач
+                  } else if (task.taskType == 'singleStep') {
+                    // обработка единовременных задач
+                  }
+                }
+              }
+
               if (projectTasks > 0) {
                 projectProgress = completedProjectTasks / projectTasks;
               }
