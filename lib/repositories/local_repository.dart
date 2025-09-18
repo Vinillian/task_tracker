@@ -7,8 +7,9 @@ import 'package:cloud_firestore/cloud_firestore.dart'; // ← ДОБАВИТЬ
 import '../models/app_user.dart';
 import '../models/project.dart';
 import '../models/task.dart';
-import '../models/subtask.dart';
 import '../models/progress_history.dart';
+import '../models/step.dart';
+import '../models/stage.dart';
 
 class LocalRepository {
   static const String _userBoxName = 'userData';
@@ -42,14 +43,15 @@ class LocalRepository {
         Hive.registerAdapter(TaskAdapter());
       }
       if (!Hive.isAdapterRegistered(3)) {
-        Hive.registerAdapter(SubtaskAdapter());
+        Hive.registerAdapter(StepAdapter()); // ← БЫВШИЙ SubtaskAdapter
+      }
+      if (!Hive.isAdapterRegistered(6)) {
+        Hive.registerAdapter(StageAdapter()); // ← НОВЫЙ адаптер
       }
       if (!Hive.isAdapterRegistered(4)) {
         Hive.registerAdapter(ProgressHistoryAdapter());
       }
-      //if (!Hive.isAdapterRegistered(5)) {
-      //  Hive.registerAdapter(RecurrenceAdapter());
-      //}
+
 
 
       // Открываем боксы

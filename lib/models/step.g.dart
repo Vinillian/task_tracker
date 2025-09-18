@@ -1,38 +1,34 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'task.dart';
+part of 'step.dart';
 
 // **************************************************************************
 // TypeAdapterGenerator
 // **************************************************************************
 
-class TaskAdapter extends TypeAdapter<Task> {
+class StepAdapter extends TypeAdapter<Step> {
   @override
-  final int typeId = 2;
+  final int typeId = 3;
 
   @override
-  Task read(BinaryReader reader) {
+  Step read(BinaryReader reader) {
     final numOfFields = reader.readByte();
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
-    return Task(
+    return Step(
       name: fields[0] as String,
       completedSteps: fields[1] as int,
       totalSteps: fields[2] as int,
-      stages: (fields[3] as List?)?.cast<Stage>(),
-      taskType: fields[4] as String,
-      recurrence: fields[5] as Recurrence?,
-      dueDate: fields[6] as DateTime?,
-      isCompleted: fields[7] as bool,
-      description: fields[8] as String?,
+      stepType: fields[3] as String,
+      isCompleted: fields[4] as bool,
     );
   }
 
   @override
-  void write(BinaryWriter writer, Task obj) {
+  void write(BinaryWriter writer, Step obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -40,17 +36,9 @@ class TaskAdapter extends TypeAdapter<Task> {
       ..writeByte(2)
       ..write(obj.totalSteps)
       ..writeByte(3)
-      ..write(obj.stages)
+      ..write(obj.stepType)
       ..writeByte(4)
-      ..write(obj.taskType)
-      ..writeByte(5)
-      ..write(obj.recurrence)
-      ..writeByte(6)
-      ..write(obj.dueDate)
-      ..writeByte(7)
-      ..write(obj.isCompleted)
-      ..writeByte(8)
-      ..write(obj.description);
+      ..write(obj.isCompleted);
   }
 
   @override
@@ -59,7 +47,7 @@ class TaskAdapter extends TypeAdapter<Task> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is TaskAdapter &&
+      other is StepAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }

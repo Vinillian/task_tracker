@@ -1,4 +1,4 @@
-import 'subtask.dart';
+import 'stage.dart';
 import 'package:hive/hive.dart';
 import 'task_type.dart';
 import 'recurrence.dart';
@@ -17,10 +17,10 @@ class Task {
   final int totalSteps;
 
   @HiveField(3)
-  final List<Subtask> subtasks;
+  final List<Stage> stages; // ← ИЗМЕНИЛИ с subtasks на stages
 
   @HiveField(4)
-  final String taskType; // Используйте String вместо TaskType
+  final String taskType;
 
   @HiveField(5)
   final Recurrence? recurrence;
@@ -34,26 +34,25 @@ class Task {
   @HiveField(8)
   final String? description;
 
-  // В конструкторе:
   Task({
     required this.name,
     this.completedSteps = 0,
     required this.totalSteps,
-    List<Subtask>? subtasks,
-    this.taskType = 'stepByStep', // Используйте строки
+    List<Stage>? stages, // ← ИЗМЕНИЛИ
+    this.taskType = 'stepByStep',
     this.recurrence,
     this.dueDate,
     this.isCompleted = false,
     this.description,
-  }) : subtasks = subtasks ?? [];
+  }) : stages = stages ?? [];
 
   Map<String, dynamic> toFirestore() {
     return {
       'name': name,
       'completedSteps': completedSteps,
       'totalSteps': totalSteps,
-      'subtasks': subtasks.map((s) => s.toFirestore()).toList(),
-      'taskType': taskType.toString(), // ← Используйте toString()
+      'stages': stages.map((s) => s.toFirestore()).toList(), // ← ИЗМЕНИЛИ
+      'taskType': taskType.toString(),
       'recurrence': recurrence?.toMap(),
       'dueDate': dueDate?.toIso8601String(),
       'isCompleted': isCompleted,
@@ -61,16 +60,15 @@ class Task {
     };
   }
 
-  // В fromFirestore просто возвращаем строку
   static Task fromFirestore(Map<String, dynamic> data) {
     return Task(
       name: data['name'] ?? '',
       completedSteps: data['completedSteps'] ?? 0,
       totalSteps: data['totalSteps'] ?? 1,
-      subtasks: (data['subtasks'] as List<dynamic>?)
-          ?.map((s) => Subtask.fromFirestore(s))
+      stages: (data['stages'] as List<dynamic>?) // ← ИЗМЕНИЛИ
+          ?.map((s) => Stage.fromFirestore(s))
           .toList() ?? [],
-      taskType: data['taskType'] ?? 'stepByStep', // ← Просто возвращаем строку
+      taskType: data['taskType'] ?? 'stepByStep',
       recurrence: data['recurrence'] != null
           ? Recurrence.fromMap(data['recurrence'])
           : null,

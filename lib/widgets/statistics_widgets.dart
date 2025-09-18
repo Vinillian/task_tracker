@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/app_user.dart';
-import '../models/task_type.dart'; // ← ДОБАВИТЬ импорт
+import '../models/task_type.dart';
 import '../utils/progress_utils.dart';
 import 'github_calendar.dart';
 
@@ -27,17 +27,30 @@ class StatisticsWidgets {
             completedTasks += 1;
           }
         } else if (task.taskType == "singleStep") {
-          totalSteps += 1; // Каждая одношаговая задача = 1 шаг
+          totalSteps += 1;
           if (task.isCompleted) {
             completedSteps += 1;
             completedTasks += 1;
           }
         }
 
-        // Обработка подзадач
-        for (var subtask in task.subtasks) {
-          totalSteps += subtask.totalSteps;
-          completedSteps += subtask.completedSteps;
+        // Обработка этапов и шагов
+        for (var stage in task.stages) {
+          if (stage.stageType == "stepByStep") {
+            totalSteps += stage.totalSteps;
+            completedSteps += stage.completedSteps;
+          } else if (stage.stageType == "singleStep") {
+            totalSteps += 1;
+            if (stage.isCompleted) {
+              completedSteps += 1;
+            }
+          }
+
+          // Обработка шагов в этапах
+          for (var step in stage.steps) {
+            totalSteps += step.totalSteps;
+            completedSteps += step.completedSteps;
+          }
         }
       }
     }
@@ -64,7 +77,7 @@ class StatisticsWidgets {
                     const SizedBox(height: 8),
                     ProgressUtils.buildAnimatedProgressBar(taskProgress, height: 16),
                     const SizedBox(height: 8),
-                    Text('${completedTasks}/$totalTasks задач (${(taskProgress * 100).toStringAsFixed(1)}%)'),
+                    Text('$completedTasks/$totalTasks задач (${(taskProgress * 100).toStringAsFixed(1)}%)'),
                     const SizedBox(height: 4),
                     Text('Включая одношаговые задачи',
                         style: TextStyle(fontSize: 12, color: Colors.grey)),
@@ -84,23 +97,8 @@ class StatisticsWidgets {
                     const SizedBox(height: 8),
                     Text('$completedSteps/$totalSteps шагов (${(stepsProgress * 100).toStringAsFixed(1)}%)'),
                     const SizedBox(height: 4),
-                    Text('Включая одношаговые задачи как 1 шаг',
+                    Text('Включая этапы и шаги',
                         style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    Text('Шаги выполнены', style: TextStyle(fontSize: 16)),
-                    const SizedBox(height: 8),
-                    ProgressUtils.buildAnimatedProgressBar(stepsProgress, height: 16),
-                    const SizedBox(height: 8),
-                    Text('$completedSteps/$totalSteps шагов (${(stepsProgress * 100).toStringAsFixed(1)}%)'),
                   ],
                 ),
               ),
@@ -109,7 +107,6 @@ class StatisticsWidgets {
             Text('Статистика по проектам',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 16),
-            // В части статистики по проектам обновить:
             ...user.projects.map((project) {
               double projectProgress = 0.0;
               int projectTasks = project.tasks.length;
@@ -137,7 +134,7 @@ class StatisticsWidgets {
                       const SizedBox(height: 8),
                       ProgressUtils.buildAnimatedProgressBar(projectProgress),
                       const SizedBox(height: 8),
-                      Text('${completedProjectTasks}/$projectTasks задач завершено'),
+                      Text('$completedProjectTasks/$projectTasks задач завершено'),
                       if (project.tasks.any((t) => t.taskType == "singleStep"))
                         Text('Включая одношаговые задачи',
                             style: TextStyle(fontSize: 11, color: Colors.grey)),

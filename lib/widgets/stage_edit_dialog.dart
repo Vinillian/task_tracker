@@ -1,34 +1,33 @@
-// widgets/subtask_edit_dialog.dart
 import 'package:flutter/material.dart';
 import '../services/task_service.dart';
-import '../models/subtask.dart'; // ← ДОБАВИТЬ этот импорт
+import '../models/stage.dart';
 
-class SubtaskEditDialog extends StatefulWidget {
-  final Function(Subtask) onSave;
-  final Subtask? initialSubtask;
+class StageEditDialog extends StatefulWidget {
+  final Function(Stage) onSave;
+  final Stage? initialStage;
 
-  const SubtaskEditDialog({
+  const StageEditDialog({
     super.key,
     required this.onSave,
-    this.initialSubtask,
+    this.initialStage,
   });
 
   @override
-  State<SubtaskEditDialog> createState() => _SubtaskEditDialogState();
+  State<StageEditDialog> createState() => _StageEditDialogState();
 }
 
-class _SubtaskEditDialogState extends State<SubtaskEditDialog> {
+class _StageEditDialogState extends State<StageEditDialog> {
   final _nameController = TextEditingController();
   final _stepsController = TextEditingController();
-  String _selectedSubtaskType = 'stepByStep';
+  String _selectedStageType = 'stepByStep';
 
   @override
   void initState() {
     super.initState();
-    if (widget.initialSubtask != null) {
-      _nameController.text = widget.initialSubtask!.name;
-      _stepsController.text = widget.initialSubtask!.totalSteps.toString();
-      _selectedSubtaskType = widget.initialSubtask!.subtaskType;
+    if (widget.initialStage != null) {
+      _nameController.text = widget.initialStage!.name;
+      _stepsController.text = widget.initialStage!.totalSteps.toString();
+      _selectedStageType = widget.initialStage!.stageType;
     } else {
       _stepsController.text = '1';
     }
@@ -37,30 +36,30 @@ class _SubtaskEditDialogState extends State<SubtaskEditDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.initialSubtask == null ? "Создать подзадачу" : "Редактировать подзадачу"),
+      title: Text(widget.initialStage == null ? "Создать этап" : "Редактировать этап"),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextFormField(
               controller: _nameController,
-              decoration: const InputDecoration(labelText: "Название подзадачи"),
+              decoration: const InputDecoration(labelText: "Название этапа"),
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: _selectedSubtaskType,
+              value: _selectedStageType,
               items: const [
-                DropdownMenuItem(value: "singleStep", child: Text("Одиночная")),
-                DropdownMenuItem(value: "stepByStep", child: Text("Пошаговая")),
+                DropdownMenuItem(value: "singleStep", child: Text("Одиночный")),
+                DropdownMenuItem(value: "stepByStep", child: Text("Пошаговый")),
               ],
               onChanged: (val) {
                 setState(() {
-                  _selectedSubtaskType = val!;
+                  _selectedStageType = val!;
                 });
               },
-              decoration: const InputDecoration(labelText: "Тип подзадачи"),
+              decoration: const InputDecoration(labelText: "Тип этапа"),
             ),
-            if (_selectedSubtaskType == "stepByStep")
+            if (_selectedStageType == "stepByStep")
               TextFormField(
                 controller: _stepsController,
                 keyboardType: TextInputType.number,
@@ -75,28 +74,28 @@ class _SubtaskEditDialogState extends State<SubtaskEditDialog> {
           child: const Text("Отмена"),
         ),
         ElevatedButton(
-          onPressed: _saveSubtask,
+          onPressed: _saveStage,
           child: const Text("Сохранить"),
         ),
       ],
     );
   }
 
-  void _saveSubtask() {
+  void _saveStage() {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
 
-    final steps = _selectedSubtaskType == "stepByStep"
+    final steps = _selectedStageType == "stepByStep"
         ? (int.tryParse(_stepsController.text) ?? 1)
         : 1;
 
-    final subtask = TaskService.createSubtask(
+    final stage = TaskService.createStage(
       name,
       steps,
-      subtaskType: _selectedSubtaskType,
+      stageType: _selectedStageType,
     );
 
-    widget.onSave(subtask);
+    widget.onSave(stage);
     Navigator.pop(context);
   }
 }

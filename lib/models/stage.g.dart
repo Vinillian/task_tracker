@@ -1,34 +1,35 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'subtask.dart';
+part of 'stage.dart';
 
 // **************************************************************************
 // TypeAdapterGenerator
 // **************************************************************************
 
-class SubtaskAdapter extends TypeAdapter<Subtask> {
+class StageAdapter extends TypeAdapter<Stage> {
   @override
-  final int typeId = 3;
+  final int typeId = 6;
 
   @override
-  Subtask read(BinaryReader reader) {
+  Stage read(BinaryReader reader) {
     final numOfFields = reader.readByte();
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
-    return Subtask(
+    return Stage(
       name: fields[0] as String,
       completedSteps: fields[1] as int,
       totalSteps: fields[2] as int,
-      subtaskType: fields[3] as String,
+      stageType: fields[3] as String,
       isCompleted: fields[4] as bool,
+      steps: (fields[5] as List?)?.cast<Step>(),
     );
   }
 
   @override
-  void write(BinaryWriter writer, Subtask obj) {
+  void write(BinaryWriter writer, Stage obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -36,9 +37,11 @@ class SubtaskAdapter extends TypeAdapter<Subtask> {
       ..writeByte(2)
       ..write(obj.totalSteps)
       ..writeByte(3)
-      ..write(obj.subtaskType)
+      ..write(obj.stageType)
       ..writeByte(4)
-      ..write(obj.isCompleted);
+      ..write(obj.isCompleted)
+      ..writeByte(5)
+      ..write(obj.steps);
   }
 
   @override
@@ -47,7 +50,7 @@ class SubtaskAdapter extends TypeAdapter<Subtask> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is SubtaskAdapter &&
+      other is StageAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }

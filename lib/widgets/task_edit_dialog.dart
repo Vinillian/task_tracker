@@ -21,7 +21,7 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _stepsController = TextEditingController();
-  String _selectedTaskType = 'stepByStep'; // ← единое имя
+  String _selectedTaskType = 'stepByStep';
   Recurrence? _recurrence;
   DateTime? _dueDate;
 
@@ -32,7 +32,7 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
       _nameController.text = widget.initialTask!.name;
       _descriptionController.text = widget.initialTask!.description ?? '';
       _stepsController.text = widget.initialTask!.totalSteps.toString();
-      _selectedTaskType = widget.initialTask!.taskType; // ← строка
+      _selectedTaskType = widget.initialTask!.taskType;
       _recurrence = widget.initialTask!.recurrence;
       _dueDate = widget.initialTask!.dueDate;
     } else {
@@ -52,6 +52,7 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
               controller: _nameController,
               decoration: const InputDecoration(labelText: "Название задачи"),
             ),
+            const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               value: _selectedTaskType,
               items: const [
@@ -104,7 +105,7 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
       name: name,
       totalSteps: steps,
       completedSteps: widget.initialTask?.completedSteps ?? 0,
-      subtasks: widget.initialTask?.subtasks ?? [],
+      stages: widget.initialTask?.stages ?? [],
       taskType: _selectedTaskType,
       recurrence: _recurrence,
       dueDate: _dueDate,

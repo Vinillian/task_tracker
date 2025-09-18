@@ -1,6 +1,7 @@
 // utils/progress_utils.dart
 import 'package:flutter/material.dart';
-import '../models/subtask.dart'; // ← ДОБАВИТЬ импорт
+import '../models/stage.dart';
+import '../models/step.dart' as custom_step;
 
 class ProgressUtils {
   /// Получение процента выполнения задачи
@@ -48,37 +49,5 @@ class ProgressUtils {
         );
       },
     );
-  }
-
-  // Метод для получения иконки подзадачи
-  static Widget getSubtaskIcon(Subtask subtask, VoidCallback onTap) {
-    if (subtask.subtaskType == 'singleStep') {
-      return Checkbox(
-        value: subtask.isCompleted,
-        onChanged: (_) => onTap(),
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      );
-    } else {
-      final progress = calculateProgress(subtask.completedSteps, subtask.totalSteps);
-      return Container(
-        width: 24,
-        height: 24,
-        decoration: BoxDecoration(
-          color: getTaskColor(progress).withOpacity(0.2),
-          shape: BoxShape.circle,
-          border: Border.all(color: getTaskColor(progress)),
-        ),
-        child: Center(
-          child: Text(
-            '${(progress * 100).toInt()}%',
-            style: TextStyle(
-              fontSize: 8,
-              fontWeight: FontWeight.bold,
-              color: getTaskColor(progress),
-            ),
-          ),
-        ),
-      );
-    }
   }
 }

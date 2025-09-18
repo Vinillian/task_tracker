@@ -1,9 +1,9 @@
-// models/subtask.dart
 import 'package:hive/hive.dart';
-part 'subtask.g.dart';
+import 'step.dart';
+part 'stage.g.dart';
 
-@HiveType(typeId: 3)
-class Subtask {
+@HiveType(typeId: 6) // Новый typeId
+class Stage {
   @HiveField(0)
   final String name;
 
@@ -14,36 +14,44 @@ class Subtask {
   final int totalSteps;
 
   @HiveField(3)
-  final String subtaskType; // 'stepByStep' или 'singleStep'
+  final String stageType; // 'stepByStep' или 'singleStep'
 
   @HiveField(4)
   final bool isCompleted;
 
-  Subtask({
+  @HiveField(5)
+  final List<Step> steps;
+
+  Stage({
     required this.name,
     this.completedSteps = 0,
     required this.totalSteps,
-    this.subtaskType = 'stepByStep',
+    this.stageType = 'stepByStep',
     this.isCompleted = false,
-  });
+    List<Step>? steps,
+  }) : steps = steps ?? [];
 
   Map<String, dynamic> toFirestore() {
     return {
-      'name': name, // ← УБРАТЬ лишнюю букву "С"
+      'name': name,
       'completedSteps': completedSteps,
       'totalSteps': totalSteps,
-      'subtaskType': subtaskType,
+      'stageType': stageType,
       'isCompleted': isCompleted,
+      'steps': steps.map((s) => s.toFirestore()).toList(),
     };
   }
 
-  static Subtask fromFirestore(Map<String, dynamic> data) {
-    return Subtask(
+  static Stage fromFirestore(Map<String, dynamic> data) {
+    return Stage(
       name: data['name'] ?? '',
       completedSteps: data['completedSteps'] ?? 0,
       totalSteps: data['totalSteps'] ?? 1,
-      subtaskType: data['subtaskType'] ?? 'stepByStep',
+      stageType: data['stageType'] ?? 'stepByStep',
       isCompleted: data['isCompleted'] ?? false,
+      steps: (data['steps'] as List<dynamic>?)
+          ?.map((s) => Step.fromFirestore(s))
+          .toList() ?? [],
     );
   }
 }

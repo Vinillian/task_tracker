@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import '../models/project.dart';
 import '../models/task.dart';
-import '../models/subtask.dart';
+import '../models/stage.dart';
 import '../models/task_type.dart';
 import '../services/firestore_service.dart';
 import '../services/task_service.dart';
 import '../widgets/dialogs.dart';
 import '../utils/progress_utils.dart';
 import '../widgets/task_edit_dialog.dart';
-import '../widgets/subtask_edit_dialog.dart';
 import 'package:intl/intl.dart';
+import '../models/step.dart' as custom_step;
+import '../widgets/stage_edit_dialog.dart';
+import '../widgets/step_edit_dialog.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final Project project;
@@ -185,12 +187,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       ),
     );
 
-    if (task.subtasks.isNotEmpty) {
+    if (task.stages.isNotEmpty) {
       children.addAll([
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
           child: Text(
-            'Подзадачи:',
+            'Этапы:',
             style: TextStyle(
               fontWeight: FontWeight.w600,
               fontSize: 14,
@@ -198,7 +200,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             ),
           ),
         ),
-        ...task.subtasks.map((subtask) => _buildSubtaskWidget(subtask, task)),
+        ...task.stages.map((stage) => _buildStageWidget(stage, task)),
       ]);
     }
 
@@ -206,8 +208,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       const Divider(height: 1, color: Colors.grey, indent: 16, endIndent: 16),
       ListTile(
         leading: const Icon(Icons.add, size: 20),
-        title: const Text('Добавить подзадачу', style: TextStyle(fontSize: 14)),
-        onTap: () => _addSubtask(task),
+        title: const Text('Добавить этап', style: TextStyle(fontSize: 14)),
+        onTap: () => _addStage(task),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       ),
     ]);
@@ -215,9 +217,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     return children;
   }
 
-  Widget _buildSubtaskWidget(Subtask subtask, Task task) {
-    final subtaskProgress = ProgressUtils.calculateProgress(
-        subtask.completedSteps, subtask.totalSteps);
+  Widget _buildStageWidget(Stage stage, Task task) {
+    final stageProgress = ProgressUtils.calculateProgress(
+        stage.completedSteps, stage.totalSteps);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -226,13 +228,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey.shade200),
       ),
-      child: ListTile(
-        dense: true,
-        visualDensity: VisualDensity.compact,
-        leading: subtask.subtaskType == 'singleStep'
+      child: ExpansionTile(
+        leading: stage.stageType == 'singleStep'
             ? Checkbox(
-          value: subtask.isCompleted,
-          onChanged: (value) => _toggleSubtaskCompletion(subtask, task),
+          value: stage.isCompleted,
+          onChanged: (value) => _toggleStageCompletion(stage, task),
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         )
             : Container(
@@ -245,54 +245,181 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           child: Icon(Icons.arrow_right, size: 16, color: Colors.blue.shade700),
         ),
         title: Text(
-          subtask.name,
+          stage.name,
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            decoration: subtask.subtaskType == 'singleStep' && subtask.isCompleted
+            decoration: stage.stageType == 'singleStep' && stage.isCompleted
                 ? TextDecoration.lineThrough
                 : null,
           ),
         ),
-        subtitle: subtask.subtaskType == 'stepByStep'
+        subtitle: stage.stageType == 'stepByStep'
             ? Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 2),
             Text(
-              '${subtask.completedSteps}/${subtask.totalSteps} шагов',
+              '${stage.completedSteps}/${stage.totalSteps} шагов',
               style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
             ),
             const SizedBox(height: 4),
-            ProgressUtils.buildAnimatedProgressBar(subtaskProgress, height: 6),
+            ProgressUtils.buildAnimatedProgressBar(stageProgress, height: 6),
           ],
         )
             : Text(
-          subtask.isCompleted ? 'Выполнено' : 'Не выполнено',
+          stage.isCompleted ? 'Выполнено' : 'Не выполнено',
           style: TextStyle(
             fontSize: 11,
-            color: subtask.isCompleted ? Colors.green : Colors.grey.shade600,
+            color: stage.isCompleted ? Colors.green : Colors.grey.shade600,
+          ),
+        ),
+        children: _buildStageChildren(stage, task),
+      ),
+    );
+  }
+
+  List<Widget> _buildStageChildren(Stage stage, Task task) {
+    final children = <Widget>[];
+
+    children.add(
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Wrap(
+          spacing: 8,
+          children: [
+            if (stage.stageType == "stepByStep")
+              _buildActionButton(
+                icon: Icons.add,
+                color: Colors.green,
+                tooltip: 'Добавить прогресс этапа',
+                onPressed: () => _addStageProgress(stage, task),
+              ),
+            _buildActionButton(
+              icon: Icons.edit,
+              color: Colors.blue,
+              tooltip: 'Редактировать этап',
+              onPressed: () => _editStage(stage, task),
+            ),
+            _buildActionButton(
+              icon: Icons.delete,
+              color: Colors.red,
+              tooltip: 'Удалить этап',
+              onPressed: () => _deleteStage(stage, task),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (stage.steps.isNotEmpty) {
+      children.addAll([
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          child: Text(
+            'Шаги:',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: Colors.grey,
+            ),
+          ),
+        ),
+        ...stage.steps.map((step) => _buildStepWidget(step, stage, task)),
+      ]);
+    }
+
+    children.addAll([
+      const Divider(height: 1, color: Colors.grey, indent: 16, endIndent: 16),
+      ListTile(
+        leading: const Icon(Icons.add, size: 20),
+        title: const Text('Добавить шаг', style: TextStyle(fontSize: 14)),
+        onTap: () => _addStep(stage, task),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      ),
+    ]);
+
+    return children;
+  }
+
+  Widget _buildStepWidget(custom_step.Step step, Stage stage, Task task) {
+    final stepProgress = ProgressUtils.calculateProgress(
+        step.completedSteps, step.totalSteps);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: ListTile(
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        leading: step.stepType == 'singleStep'
+            ? Checkbox(
+          value: step.isCompleted,
+          onChanged: (value) => _toggleStepCompletion(step, stage, task),
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        )
+            : Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            color: Colors.green.shade50,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(Icons.circle, size: 12, color: Colors.green.shade700),
+        ),
+        title: Text(
+          step.name,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            decoration: step.stepType == 'singleStep' && step.isCompleted
+                ? TextDecoration.lineThrough
+                : null,
+          ),
+        ),
+        subtitle: step.stepType == 'stepByStep'
+            ? Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 2),
+            Text(
+              '${step.completedSteps}/${step.totalSteps} шагов',
+              style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 4),
+            ProgressUtils.buildAnimatedProgressBar(stepProgress, height: 4),
+          ],
+        )
+            : Text(
+          step.isCompleted ? 'Выполнено' : 'Не выполнено',
+          style: TextStyle(
+            fontSize: 10,
+            color: step.isCompleted ? Colors.green : Colors.grey.shade600,
           ),
         ),
         trailing: Wrap(
           spacing: 4,
           children: [
-            if (subtask.subtaskType == 'stepByStep')
+            if (step.stepType == 'stepByStep')
               IconButton(
-                icon: Icon(Icons.add, size: 18, color: Colors.green.shade600),
-                onPressed: () => _addSubtaskProgress(subtask, task),
+                icon: Icon(Icons.add, size: 16, color: Colors.green.shade600),
+                onPressed: () => _addStepProgress(step, stage, task),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
               ),
             IconButton(
-              icon: Icon(Icons.edit, size: 18, color: Colors.blue.shade600),
-              onPressed: () => _editSubtask(subtask, task),
+              icon: Icon(Icons.edit, size: 16, color: Colors.blue.shade600),
+              onPressed: () => _editStep(step, stage, task),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
             ),
             IconButton(
-              icon: Icon(Icons.delete, size: 18, color: Colors.red.shade600),
-              onPressed: () => _deleteSubtask(subtask, task),
+              icon: Icon(Icons.delete, size: 16, color: Colors.red.shade600),
+              onPressed: () => _deleteStep(step, stage, task),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
             ),
@@ -325,47 +452,52 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  // В методе _toggleTaskCompletion добавить запись в историю:
   void _toggleTaskCompletion(Task task) {
-    final wasCompleted = task.isCompleted; // ← Сохраняем предыдущее состояние
+    final wasCompleted = task.isCompleted;
 
     setState(() {
       final taskIndex = widget.project.tasks.indexOf(task);
       widget.project.tasks[taskIndex] = TaskService.toggleTaskCompletion(task);
     });
 
-    // Отладочная информация
-    print('🔄 Toggle task: ${task.name}, was: $wasCompleted, now: ${!wasCompleted}');
-
-    // Записываем в историю только если задача ВЫПОЛНЕНА (не отменена)
-    if (!wasCompleted) { // ← Если задача была НЕ выполнена, а теперь выполнена
+    if (!wasCompleted) {
       widget.onAddProgressHistory(task.name, 1, 'task');
-      print('✅ Added to history: ${task.name}');
     } else {
-      // Если задача была выполнена, а теперь отменена
       widget.onAddProgressHistory("Отмена: ${task.name}", -1, 'task');
-      print('❌ Added cancellation to history: ${task.name}');
     }
 
     widget.onProjectUpdated(widget.project);
   }
 
-  // В методе _toggleSubtaskCompletion добавить запись в историю:
-  void _toggleSubtaskCompletion(Subtask subtask, Task task) {
-    final wasCompleted = subtask.isCompleted; // ← Сохраняем предыдущее состояние
+  void _toggleStageCompletion(Stage stage, Task task) {
+    final wasCompleted = stage.isCompleted;
 
     setState(() {
-      final subtaskIndex = task.subtasks.indexOf(subtask);
-      task.subtasks[subtaskIndex] = TaskService.toggleSubtaskCompletion(subtask);
+      final stageIndex = task.stages.indexOf(stage);
+      task.stages[stageIndex] = TaskService.toggleStageCompletion(stage);
     });
 
-    // Записываем в историю только если подзадача ВЫПОЛНЕНА
     if (!wasCompleted) {
-      widget.onAddProgressHistory(subtask.name, 1, 'subtask');
-      print('✅ Added subtask to history: ${subtask.name}');
+      widget.onAddProgressHistory(stage.name, 1, 'stage');
     } else {
-      widget.onAddProgressHistory("Отмена: ${subtask.name}", -1, 'subtask');
-      print('❌ Added subtask cancellation to history: ${subtask.name}');
+      widget.onAddProgressHistory("Отмена: ${stage.name}", -1, 'stage');
+    }
+
+    widget.onProjectUpdated(widget.project);
+  }
+
+  void _toggleStepCompletion(custom_step.Step step, Stage stage, Task task) {
+    final wasCompleted = step.isCompleted;
+
+    setState(() {
+      final stepIndex = stage.steps.indexOf(step);
+      stage.steps[stepIndex] = TaskService.toggleStepCompletion(step);
+    });
+
+    if (!wasCompleted) {
+      widget.onAddProgressHistory(step.name, 1, 'step');
+    } else {
+      widget.onAddProgressHistory("Отмена: ${step.name}", -1, 'step');
     }
 
     widget.onProjectUpdated(widget.project);
@@ -432,13 +564,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     }
   }
 
-  void _addSubtask(Task task) async {
-    final subtask = await showDialog<Subtask>(
+  void _addStage(Task task) async {
+    final stage = await showDialog<Stage>(
       context: context,
-      builder: (context) => SubtaskEditDialog(
-        onSave: (newSubtask) {
+      builder: (context) => StageEditDialog(
+        onSave: (newStage) {
           setState(() {
-            task.subtasks.add(newSubtask);
+            task.stages.add(newStage);
           });
           widget.onProjectUpdated(widget.project);
         },
@@ -446,20 +578,80 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  void _editSubtask(Subtask subtask, Task task) async {
-    final updatedSubtask = await showDialog<Subtask>(
+  void _editStage(Stage stage, Task task) async {
+    final updatedStage = await showDialog<Stage>(
       context: context,
-      builder: (context) => SubtaskEditDialog(
-        initialSubtask: subtask,
-        onSave: (newSubtask) {
+      builder: (context) => StageEditDialog(
+        initialStage: stage,
+        onSave: (newStage) {
           setState(() {
-            final subtaskIndex = task.subtasks.indexOf(subtask);
-            task.subtasks[subtaskIndex] = newSubtask;
+            final stageIndex = task.stages.indexOf(stage);
+            task.stages[stageIndex] = newStage;
           });
           widget.onProjectUpdated(widget.project);
         },
       ),
     );
+  }
+
+  void _deleteStage(Stage stage, Task task) async {
+    final confirm = await Dialogs.showConfirmDialog(
+      context: context,
+      title: 'Удалить этап',
+      message: 'Вы уверены, что хотите удалить "${stage.name}"?',
+    );
+
+    if (confirm) {
+      setState(() {
+        task.stages.remove(stage);
+      });
+      widget.onProjectUpdated(widget.project);
+    }
+  }
+
+  void _addStep(Stage stage, Task task) async {
+    final step = await showDialog<custom_step.Step>(
+      context: context,
+      builder: (context) => StepEditDialog(
+        onSave: (newStep) {
+          setState(() {
+            stage.steps.add(newStep);
+          });
+          widget.onProjectUpdated(widget.project);
+        },
+      ),
+    );
+  }
+
+  void _editStep(custom_step.Step step, Stage stage, Task task) async {
+    final updatedStep = await showDialog<custom_step.Step>(
+      context: context,
+      builder: (context) => StepEditDialog(
+        initialStep: step,
+        onSave: (newStep) {
+          setState(() {
+            final stepIndex = stage.steps.indexOf(step);
+            stage.steps[stepIndex] = newStep;
+            widget.onProjectUpdated(widget.project);
+          });
+        },
+      ),
+    );
+  }
+
+  void _deleteStep(custom_step.Step step, Stage stage, Task task) async {
+    final confirm = await Dialogs.showConfirmDialog(
+      context: context,
+      title: 'Удалить шаг',
+      message: 'Вы уверены, что хотите удалить "${step.name}"?',
+    );
+
+    if (confirm) {
+      setState(() {
+        stage.steps.remove(step);
+        widget.onProjectUpdated(widget.project);
+      });
+    }
   }
 
   void _addTaskProgress(Task task) async {
@@ -479,37 +671,37 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     }
   }
 
-  void _addSubtaskProgress(Subtask subtask, Task task) async {
+  void _addStageProgress(Stage stage, Task task) async {
     final steps = await Dialogs.showNumberInputDialog(
       context: context,
-      title: 'Добавить прогресс: ${subtask.name}',
-      message: 'Текущий прогресс: ${subtask.completedSteps}/${subtask.totalSteps}',
+      title: 'Добавить прогресс: ${stage.name}',
+      message: 'Текущий прогресс: ${stage.completedSteps}/${stage.totalSteps}',
     );
 
     if (steps != null && steps > 0) {
       setState(() {
-        final subtaskIndex = task.subtasks.indexOf(subtask);
-        task.subtasks[subtaskIndex] = TaskService.addProgressToSubtask(subtask, steps);
+        final stageIndex = task.stages.indexOf(stage);
+        task.stages[stageIndex] = TaskService.addProgressToStage(stage, steps);
       });
       widget.onProjectUpdated(widget.project);
-      widget.onAddProgressHistory(subtask.name, steps, 'subtask');
+      widget.onAddProgressHistory(stage.name, steps, 'stage');
     }
   }
 
-  void _deleteSubtask(Subtask subtask, Task task) async {
-    final confirm = await Dialogs.showConfirmDialog(
+  void _addStepProgress(custom_step.Step step, Stage stage, Task task) async {
+    final steps = await Dialogs.showNumberInputDialog(
       context: context,
-      title: 'Удалить подзадачу',
-      message: 'Вы уверены, что хотите удалить "${subtask.name}"?',
+      title: 'Добавить прогресс: ${step.name}',
+      message: 'Текущий прогресс: ${step.completedSteps}/${step.totalSteps}',
     );
 
-    if (confirm) {
+    if (steps != null && steps > 0) {
       setState(() {
-        task.subtasks.remove(subtask);
+        final stepIndex = stage.steps.indexOf(step);
+        stage.steps[stepIndex] = TaskService.addProgressToStep(step, steps);
       });
       widget.onProjectUpdated(widget.project);
+      widget.onAddProgressHistory(step.name, steps, 'step');
     }
   }
-
-
 }
