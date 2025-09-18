@@ -26,12 +26,12 @@ class GitHubCalendar extends StatelessWidget {
     return firestoreService.userStream(currentUid);
   }
 
+  // В методе _buildContributions обновить обработку истории:
   Map<DateTime, int> _buildContributions(List<dynamic> progressHistory) {
     final now = DateTime.now();
     final start = DateTime(now.year - 1, now.month, now.day);
     final map = <DateTime, int>{};
 
-    // Initialize all dates with 0 contributions
     for (var d = start; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
       map[DateTime(d.year, d.month, d.day)] = 0;
     }
@@ -44,11 +44,9 @@ class GitHubCalendar extends StatelessWidget {
         int steps = 0;
 
         if (historyItem is ProgressHistory) {
-          // Handle ProgressHistory objects
           date = historyItem.date;
           steps = historyItem.stepsAdded;
         } else if (historyItem is Map<String, dynamic>) {
-          // Handle Map data (from Firestore)
           final dynamic dateData = historyItem['date'];
           final dynamic stepsData = historyItem['stepsAdded'];
 

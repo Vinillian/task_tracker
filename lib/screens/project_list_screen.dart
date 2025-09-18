@@ -27,12 +27,20 @@ class ProjectListScreen extends StatelessWidget {
   }
 
   // Новый метод для отображения прогресса проекта
+
   Widget _buildProjectProgress(Project project) {
     int completed = 0;
     int total = project.tasks.length;
 
     for (var task in project.tasks) {
-      if (task.completedSteps >= task.totalSteps) completed++;
+      // Для пошаговых задач - считаем завершенными если все шаги выполнены
+      if (task.taskType == "stepByStep") {
+        if (task.completedSteps >= task.totalSteps) completed++;
+      }
+      // Для одношаговых задач - используем флаг isCompleted
+      else if (task.taskType == "singleStep") {
+        if (task.isCompleted) completed++;
+      }
     }
 
     double progress = total > 0 ? completed / total : 0;
@@ -51,6 +59,10 @@ class ProjectListScreen extends StatelessWidget {
         Text(
           '${(progress * 100).toInt()}% завершено',
           style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+        ),
+        Text(
+          '$completed/$total задач',
+          style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
         ),
       ],
     );
