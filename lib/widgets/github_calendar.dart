@@ -32,29 +32,43 @@ class GitHubCalendar extends StatelessWidget {
     final start = DateTime(now.year - 1, now.month, now.day);
     final map = <DateTime, int>{};
 
+    // Initialize all dates with 0 contributions
     for (var d = start; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
       map[DateTime(d.year, d.month, d.day)] = 0;
     }
 
     if (progressHistory.isEmpty) return map;
 
+    print('📊 Processing ${progressHistory.length} history items for calendar');
+
     for (final historyItem in progressHistory) {
       try {
         DateTime date;
         int steps = 0;
+        String? itemName;
+        String? itemType;
 
         if (historyItem is ProgressHistory) {
+          // Handle ProgressHistory objects
           date = historyItem.date;
           steps = historyItem.stepsAdded;
+          itemName = historyItem.itemName;
+          itemType = historyItem.itemType;
         } else if (historyItem is Map<String, dynamic>) {
+          // Handle Map data (from Firestore)
           final dynamic dateData = historyItem['date'];
           final dynamic stepsData = historyItem['stepsAdded'];
+          final dynamic nameData = historyItem['itemName'];
+          final dynamic typeData = historyItem['itemType'];
 
           if (stepsData is int) {
             steps = stepsData;
           } else if (stepsData is String) {
             steps = int.tryParse(stepsData) ?? 0;
           }
+
+          itemName = nameData?.toString();
+          itemType = typeData?.toString();
 
           if (dateData is Timestamp) {
             date = dateData.toDate();
@@ -67,17 +81,38 @@ class GitHubCalendar extends StatelessWidget {
           continue;
         }
 
+        // Отладочная информация
+        print('📅 Processing: $itemName, steps: $steps, type: $itemType, date: $date');
+
+        // Игнорируем отмены (отрицательные шаги)
+        if (steps <= 0) {
+          print('⏭️ Skipping negative steps: $steps');
+          continue;
+        }
+
+        // Игнорируем записи, которые начинаются с "Отмена:"
+        if (itemName != null && itemName.startsWith('Отмена:')) {
+          print('⏭️ Skipping cancellation: $itemName');
+          continue;
+        }
+
         final normalizedDate = DateTime(date.year, date.month, date.day);
         if (map.containsKey(normalizedDate)) {
-          map[normalizedDate] = map[normalizedDate]! + steps;
+          // Для календаря считаем каждое действие как 1 вклад
+          // независимо от типа задачи или количества шагов
+          map[normalizedDate] = map[normalizedDate]! + 1;
+          print('✅ Added contribution for $normalizedDate, total: ${map[normalizedDate]}');
         }
       } catch (e) {
-        print('Ошибка обработки записи истории: $e');
+        print('❌ Ошибка обработки записи истории: $e');
         continue;
       }
     }
+
+    print('📈 Final contributions map: $map');
     return map;
   }
+
 
   Color _colorForCount(int count) {
     if (count == 0) return const Color(0xFFEBEDF0);
@@ -180,7 +215,8 @@ class GitHubCalendar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text('Сегодня: ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey[700])),
-          Text('$todayContributions шагов', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _colorForCount(todayContributions))),
+          Text('$todayContributions ${_getContributionText(todayContributions)}',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _colorForCount(todayContributions))),
           if (todayContributions > 0) ...[
             const SizedBox(width: 8),
             Icon(Icons.check_circle, color: _colorForCount(todayContributions), size: 16),
@@ -223,6 +259,10 @@ class GitHubCalendar extends StatelessWidget {
             ),
           );
         }
+
+        // Отладочная информация о прогрессе
+        print('👤 User: ${user.username}');
+        print('📋 Total history items: ${user.progressHistory.length}');
 
         final contributions = _buildContributions(user.progressHistory);
         final weeks = _weeks(contributions);
@@ -303,8 +343,12 @@ class GitHubCalendar extends StatelessWidget {
                                           color: color, borderRadius: BorderRadius.circular(2),
                                           border: Border.all(color: isToday ? Colors.blue.withOpacity(0.8) : const Color(0x11000000), width: isToday ? 1.5 : 1),
                                         ),
-                                        child: Tooltip(
-                                          message: '${DateFormat('dd MMM yyyy').format(date)}\n$count шагов${isToday ? ' (сегодня)' : ''}',
+                                        child:
+                                        Tooltip(
+                                          message: '${DateFormat('dd MMM yyyy').format(date)}\n'
+                                              '${count} '  // ← Используем переменную count
+                                              '${_getContributionText(count)}'  // ← Используем переменную count
+                                              '${isToday ? ' (сегодня)' : ''}',
                                           child: const SizedBox.expand(),
                                         ),
                                       );
@@ -346,6 +390,13 @@ class GitHubCalendar extends StatelessWidget {
         );
       },
     );
+  }
+
+  String _getContributionText(int count) {
+    if (count == 0) return 'вкладов';
+    if (count == 1) return 'вклад';
+    if (count < 5) return 'вклада';
+    return 'вкладов';
   }
 
   void _checkDataFormat(AppUser user) {

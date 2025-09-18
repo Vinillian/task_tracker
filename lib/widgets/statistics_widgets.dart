@@ -34,7 +34,7 @@ class StatisticsWidgets {
           }
         }
 
-        // Обработка подзадач (только для пошаговых задач)
+        // Обработка подзадач
         for (var subtask in task.subtasks) {
           totalSteps += subtask.totalSteps;
           completedSteps += subtask.completedSteps;

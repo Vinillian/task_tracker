@@ -325,27 +325,47 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
+  // В методе _toggleTaskCompletion добавить запись в историю:
   void _toggleTaskCompletion(Task task) {
+    final wasCompleted = task.isCompleted; // ← Сохраняем предыдущее состояние
+
     setState(() {
       final taskIndex = widget.project.tasks.indexOf(task);
       widget.project.tasks[taskIndex] = TaskService.toggleTaskCompletion(task);
     });
 
-    if (task.isCompleted) {
+    // Отладочная информация
+    print('🔄 Toggle task: ${task.name}, was: $wasCompleted, now: ${!wasCompleted}');
+
+    // Записываем в историю только если задача ВЫПОЛНЕНА (не отменена)
+    if (!wasCompleted) { // ← Если задача была НЕ выполнена, а теперь выполнена
       widget.onAddProgressHistory(task.name, 1, 'task');
+      print('✅ Added to history: ${task.name}');
+    } else {
+      // Если задача была выполнена, а теперь отменена
+      widget.onAddProgressHistory("Отмена: ${task.name}", -1, 'task');
+      print('❌ Added cancellation to history: ${task.name}');
     }
 
     widget.onProjectUpdated(widget.project);
   }
 
+  // В методе _toggleSubtaskCompletion добавить запись в историю:
   void _toggleSubtaskCompletion(Subtask subtask, Task task) {
+    final wasCompleted = subtask.isCompleted; // ← Сохраняем предыдущее состояние
+
     setState(() {
       final subtaskIndex = task.subtasks.indexOf(subtask);
       task.subtasks[subtaskIndex] = TaskService.toggleSubtaskCompletion(subtask);
     });
 
-    if (subtask.isCompleted) {
+    // Записываем в историю только если подзадача ВЫПОЛНЕНА
+    if (!wasCompleted) {
       widget.onAddProgressHistory(subtask.name, 1, 'subtask');
+      print('✅ Added subtask to history: ${subtask.name}');
+    } else {
+      widget.onAddProgressHistory("Отмена: ${subtask.name}", -1, 'subtask');
+      print('❌ Added subtask cancellation to history: ${subtask.name}');
     }
 
     widget.onProjectUpdated(widget.project);
@@ -490,4 +510,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       widget.onProjectUpdated(widget.project);
     }
   }
+
+
 }
