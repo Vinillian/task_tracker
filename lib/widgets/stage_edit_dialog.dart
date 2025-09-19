@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../services/task_service.dart';
 import '../models/stage.dart';
+import '../models/recurrence.dart';
 
 class StageEditDialog extends StatefulWidget {
   final Function(Stage) onSave;
@@ -20,6 +22,8 @@ class _StageEditDialogState extends State<StageEditDialog> {
   final _nameController = TextEditingController();
   final _stepsController = TextEditingController();
   String _selectedStageType = 'stepByStep';
+  DateTime? _plannedDate;
+  Recurrence? _plannedRecurrence;
 
   @override
   void initState() {
@@ -28,6 +32,7 @@ class _StageEditDialogState extends State<StageEditDialog> {
       _nameController.text = widget.initialStage!.name;
       _stepsController.text = widget.initialStage!.totalSteps.toString();
       _selectedStageType = widget.initialStage!.stageType;
+      _plannedDate = widget.initialStage!.plannedDate;
     } else {
       _stepsController.text = '1';
     }
@@ -65,6 +70,39 @@ class _StageEditDialogState extends State<StageEditDialog> {
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: "Количество шагов"),
               ),
+            const SizedBox(height: 16),
+            ListTile(
+              title: Text(_plannedDate == null
+                  ? 'Запланировать дату'
+                  : 'Запланировано: ${DateFormat('dd.MM.yyyy').format(_plannedDate!)}'),
+              trailing: const Icon(Icons.calendar_today),
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: _plannedDate ?? DateTime.now(),
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (date != null) {
+                  setState(() => _plannedDate = date);
+                }
+              },
+            ),
+            DropdownButtonFormField<RecurrenceType>(
+              value: _plannedRecurrence?.type,
+              items: RecurrenceType.values.map((type) {
+                return DropdownMenuItem(
+                  value: type,
+                  child: Text(Recurrence(type: type).displayText),
+                );
+              }).toList(),
+              onChanged: (type) {
+                setState(() {
+                  _plannedRecurrence = Recurrence(type: type!);
+                });
+              },
+              decoration: const InputDecoration(labelText: 'Повторение планирования'),
+            ),
           ],
         ),
       ),

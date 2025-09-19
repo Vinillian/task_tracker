@@ -34,16 +34,21 @@ class Task {
   @HiveField(8)
   final String? description;
 
+  @HiveField(9)
+  final DateTime? plannedDate;
+
+
   Task({
     required this.name,
     this.completedSteps = 0,
     required this.totalSteps,
-    List<Stage>? stages, // ← ИЗМЕНИЛИ
+    List<Stage>? stages,
     this.taskType = 'stepByStep',
-    this.recurrence,
+    this.recurrence, // Уже есть
     this.dueDate,
     this.isCompleted = false,
     this.description,
+    this.plannedDate, // Добавлено
   }) : stages = stages ?? [];
 
   Map<String, dynamic> toFirestore() {
@@ -51,12 +56,13 @@ class Task {
       'name': name,
       'completedSteps': completedSteps,
       'totalSteps': totalSteps,
-      'stages': stages.map((s) => s.toFirestore()).toList(), // ← ИЗМЕНИЛИ
+      'stages': stages.map((s) => s.toFirestore()).toList(),
       'taskType': taskType.toString(),
       'recurrence': recurrence?.toMap(),
       'dueDate': dueDate?.toIso8601String(),
       'isCompleted': isCompleted,
       'description': description,
+      'plannedDate': plannedDate?.toIso8601String(), // Добавлено
     };
   }
 
@@ -65,7 +71,7 @@ class Task {
       name: data['name'] ?? '',
       completedSteps: data['completedSteps'] ?? 0,
       totalSteps: data['totalSteps'] ?? 1,
-      stages: (data['stages'] as List<dynamic>?) // ← ИЗМЕНИЛИ
+      stages: (data['stages'] as List<dynamic>?)
           ?.map((s) => Stage.fromFirestore(s))
           .toList() ?? [],
       taskType: data['taskType'] ?? 'stepByStep',
@@ -77,6 +83,9 @@ class Task {
           : null,
       isCompleted: data['isCompleted'] ?? false,
       description: data['description'],
+      plannedDate: data['plannedDate'] != null // Добавлено
+          ? DateTime.parse(data['plannedDate'])
+          : null,
     );
   }
 }

@@ -8,6 +8,7 @@ import '../models/progress_history.dart';
 import '../widgets/statistics_widgets.dart';
 import 'project_list_screen.dart';
 import 'drawer_screen.dart';
+import 'planning_calendar_screen.dart'; // ДОБАВЬТЕ ЭТОТ ИМПОРТ
 import '../repositories/local_repository.dart';
 
 class TaskTrackerScreen extends StatefulWidget {
@@ -28,9 +29,10 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this); // Измените 2 на 3
     _loadUserData();
   }
+
 
   // Метод обновления данных
   Future<void> _refreshData() async {
@@ -246,6 +248,7 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
           tabs: const [
             Tab(icon: Icon(Icons.list), text: 'Проекты'),
             Tab(icon: Icon(Icons.bar_chart), text: 'Статистика'),
+            Tab(icon: Icon(Icons.calendar_today), text: 'Планирование'),
           ],
         ),
       ),
@@ -298,6 +301,9 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
                       : const Center(child: CircularProgressIndicator()),
                   currentUser != null
                       ? StatisticsWidgets.buildStatisticsTab(context, currentUser)
+                      : const Center(child: CircularProgressIndicator()),
+                  currentUser != null
+                      ? PlanningCalendarScreen(currentUser: currentUser) // Новая вкладка
                       : const Center(child: CircularProgressIndicator()),
                 ],
               ),

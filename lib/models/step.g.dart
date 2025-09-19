@@ -22,13 +22,15 @@ class StepAdapter extends TypeAdapter<Step> {
       totalSteps: fields[2] as int,
       stepType: fields[3] as String,
       isCompleted: fields[4] as bool,
+      plannedDate: fields[5] as DateTime?,
+      recurrence: fields[6] as Recurrence?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Step obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -38,7 +40,11 @@ class StepAdapter extends TypeAdapter<Step> {
       ..writeByte(3)
       ..write(obj.stepType)
       ..writeByte(4)
-      ..write(obj.isCompleted);
+      ..write(obj.isCompleted)
+      ..writeByte(5)
+      ..write(obj.plannedDate)
+      ..writeByte(6)
+      ..write(obj.recurrence);
   }
 
   @override

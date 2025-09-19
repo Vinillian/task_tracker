@@ -23,13 +23,15 @@ class StageAdapter extends TypeAdapter<Stage> {
       stageType: fields[3] as String,
       isCompleted: fields[4] as bool,
       steps: (fields[5] as List?)?.cast<Step>(),
+      plannedDate: fields[6] as DateTime?,
+      recurrence: fields[7] as Recurrence?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Stage obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -41,7 +43,11 @@ class StageAdapter extends TypeAdapter<Stage> {
       ..writeByte(4)
       ..write(obj.isCompleted)
       ..writeByte(5)
-      ..write(obj.steps);
+      ..write(obj.steps)
+      ..writeByte(6)
+      ..write(obj.plannedDate)
+      ..writeByte(7)
+      ..write(obj.recurrence);
   }
 
   @override

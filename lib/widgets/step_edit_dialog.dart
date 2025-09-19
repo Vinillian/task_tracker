@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../services/task_service.dart';
-import '../models/step.dart' as custom_step; // ← переименовываем
+import '../models/step.dart' as custom_step;
+import '../models/recurrence.dart';
 
 class StepEditDialog extends StatefulWidget {
-  final Function(custom_step.Step) onSave; // ← используем переименованный
-  final custom_step.Step? initialStep; // ← используем переименованный
+  final Function(custom_step.Step) onSave;
+  final custom_step.Step? initialStep;
 
   const StepEditDialog({
     super.key,
@@ -20,6 +22,8 @@ class _StepEditDialogState extends State<StepEditDialog> {
   final _nameController = TextEditingController();
   final _stepsController = TextEditingController();
   String _selectedStepType = 'stepByStep';
+  DateTime? _plannedDate;
+  Recurrence? _plannedRecurrence;
 
   @override
   void initState() {
@@ -28,6 +32,7 @@ class _StepEditDialogState extends State<StepEditDialog> {
       _nameController.text = widget.initialStep!.name;
       _stepsController.text = widget.initialStep!.totalSteps.toString();
       _selectedStepType = widget.initialStep!.stepType;
+      _plannedDate = widget.initialStep!.plannedDate;
     } else {
       _stepsController.text = '1';
     }
@@ -65,6 +70,39 @@ class _StepEditDialogState extends State<StepEditDialog> {
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: "Количество шагов"),
               ),
+            const SizedBox(height: 16),
+            ListTile(
+              title: Text(_plannedDate == null
+                  ? 'Запланировать дату'
+                  : 'Запланировано: ${DateFormat('dd.MM.yyyy').format(_plannedDate!)}'),
+              trailing: const Icon(Icons.calendar_today),
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: _plannedDate ?? DateTime.now(),
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (date != null) {
+                  setState(() => _plannedDate = date);
+                }
+              },
+            ),
+            DropdownButtonFormField<RecurrenceType>(
+              value: _plannedRecurrence?.type,
+              items: RecurrenceType.values.map((type) {
+                return DropdownMenuItem(
+                  value: type,
+                  child: Text(Recurrence(type: type).displayText),
+                );
+              }).toList(),
+              onChanged: (type) {
+                setState(() {
+                  _plannedRecurrence = Recurrence(type: type!);
+                });
+              },
+              decoration: const InputDecoration(labelText: 'Повторение планирования'),
+            ),
           ],
         ),
       ),
