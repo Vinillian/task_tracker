@@ -11,8 +11,13 @@ import 'task_tracker_screen.dart';
 
 class PlanningCalendarScreen extends StatelessWidget {
   final AppUser? currentUser;
+  final Function(Map<String, dynamic>) onItemCompleted; // ← ДОБАВИТЬ
 
-  const PlanningCalendarScreen({super.key, required this.currentUser});
+  const PlanningCalendarScreen({
+    super.key,
+    required this.currentUser,
+    required this.onItemCompleted, // ← ДОБАВИТЬ
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +41,7 @@ class PlanningCalendarScreen extends StatelessWidget {
           date: date,
           projectName: project.name,
           isRecurring: task.recurrence != null,
-          onTap: () => _showCompletionDialog(context, task, project),
+          onTap: () => _showCompletionDialog(context, task, project, null, null, onItemCompleted),
         ));
       }
     }
@@ -58,7 +63,7 @@ class PlanningCalendarScreen extends StatelessWidget {
           projectName: project.name,
           taskName: task.name,
           isRecurring: stage.recurrence != null,
-          onTap: () => _showCompletionDialog(context, stage, project, task),
+          onTap: () => _showCompletionDialog(context, stage, project, task, null, onItemCompleted),
         ));
       }
     }
@@ -81,7 +86,7 @@ class PlanningCalendarScreen extends StatelessWidget {
           taskName: task.name,
           stageName: stage.name,
           isRecurring: step.recurrence != null,
-          onTap: () => _showCompletionDialog(context, step, project, task, stage),
+          onTap: () => _showCompletionDialog(context, step, project, task, stage, onItemCompleted),
         ));
       }
     }
@@ -208,9 +213,8 @@ class PlanningCalendarScreen extends StatelessWidget {
   }
 
 
-  // ЗАМЕНИТЬ метод _showCompletionDialog на:
   void _showCompletionDialog(BuildContext context, dynamic item,
-      [Project? project, Task? task, Stage? stage]) {
+      [Project? project, Task? task, Stage? stage, Function? callback]) {
     showDialog(
       context: context,
       builder: (context) => DetailedCompletionDialog(
@@ -221,8 +225,11 @@ class PlanningCalendarScreen extends StatelessWidget {
       ),
     ).then((result) {
       if (result != null) {
-        print('Элемент выполнен: $result');
-        // TODO: Реализовать интеграцию с состоянием
+        if (callback != null) {
+          callback(result);
+        } else {
+          print('Элемент выполнен: $result');
+        }
       }
     });
   }

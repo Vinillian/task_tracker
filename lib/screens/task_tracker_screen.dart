@@ -306,7 +306,10 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
                       ? StatisticsWidgets.buildStatisticsTab(context, currentUser)
                       : const Center(child: CircularProgressIndicator()),
                   currentUser != null
-                      ? PlanningCalendarScreen(currentUser: currentUser) // Новая вкладка
+                      ? PlanningCalendarScreen(
+                    currentUser: currentUser,
+                    onItemCompleted: _handleItemCompletion,
+                  )
                       : const Center(child: CircularProgressIndicator()),
                 ],
               ),
