@@ -7,6 +7,7 @@ import '../services/firestore_service.dart';
 import '../services/auth_service.dart';
 import '../models/progress_history.dart';
 
+
 class GitHubCalendar extends StatelessWidget {
   const GitHubCalendar({super.key});
 
@@ -26,7 +27,6 @@ class GitHubCalendar extends StatelessWidget {
     return firestoreService.userStream(currentUid);
   }
 
-  // В методе _buildContributions обновить обработку истории:
   Map<DateTime, int> _buildContributions(List<dynamic> progressHistory) {
     final now = DateTime.now();
     final start = DateTime(now.year - 1, now.month, now.day);
@@ -39,36 +39,25 @@ class GitHubCalendar extends StatelessWidget {
 
     if (progressHistory.isEmpty) return map;
 
-    print('📊 Processing ${progressHistory.length} history items for calendar');
-
     for (final historyItem in progressHistory) {
       try {
         DateTime date;
         int steps = 0;
-        String? itemName;
-        String? itemType;
 
         if (historyItem is ProgressHistory) {
           // Handle ProgressHistory objects
           date = historyItem.date;
           steps = historyItem.stepsAdded;
-          itemName = historyItem.itemName;
-          itemType = historyItem.itemType;
         } else if (historyItem is Map<String, dynamic>) {
           // Handle Map data (from Firestore)
           final dynamic dateData = historyItem['date'];
           final dynamic stepsData = historyItem['stepsAdded'];
-          final dynamic nameData = historyItem['itemName'];
-          final dynamic typeData = historyItem['itemType'];
 
           if (stepsData is int) {
             steps = stepsData;
           } else if (stepsData is String) {
             steps = int.tryParse(stepsData) ?? 0;
           }
-
-          itemName = nameData?.toString();
-          itemType = typeData?.toString();
 
           if (dateData is Timestamp) {
             date = dateData.toDate();
@@ -81,27 +70,12 @@ class GitHubCalendar extends StatelessWidget {
           continue;
         }
 
-        // Отладочная информация
-        print('📅 Processing: $itemName, steps: $steps, type: $itemType, date: $date');
-
-        // Игнорируем отмены (отрицательные шаги)
-        if (steps <= 0) {
-          print('⏭️ Skipping negative steps: $steps');
-          continue;
-        }
-
-        // Игнорируем записи, которые начинаются с "Отмена:"
-        if (itemName != null && itemName.startsWith('Отмена:')) {
-          print('⏭️ Skipping cancellation: $itemName');
-          continue;
-        }
-
-        final normalizedDate = DateTime(date.year, date.month, date.day);
-        if (map.containsKey(normalizedDate)) {
-          // Для календаря считаем каждое действие как 1 вклад
-          // независимо от типа задачи или количества шагов
-          map[normalizedDate] = map[normalizedDate]! + 1;
-          print('✅ Added contribution for $normalizedDate, total: ${map[normalizedDate]}');
+        // Фильтруем только положительные вклады и не отмены
+        if (steps > 0) {
+          final normalizedDate = DateTime(date.year, date.month, date.day);
+          if (map.containsKey(normalizedDate)) {
+            map[normalizedDate] = map[normalizedDate]! + 1;
+          }
         }
       } catch (e) {
         print('❌ Ошибка обработки записи истории: $e');
@@ -109,7 +83,6 @@ class GitHubCalendar extends StatelessWidget {
       }
     }
 
-    print('📈 Final contributions map: $map');
     return map;
   }
 
@@ -226,6 +199,7 @@ class GitHubCalendar extends StatelessWidget {
     );
   }
 
+
   Widget _legendBox(Color color) => Container(
       width: 12, height: 12, margin: const EdgeInsets.symmetric(horizontal: 2),
       decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2), border: Border.all(color: const Color(0x11000000)))
@@ -237,27 +211,12 @@ class GitHubCalendar extends StatelessWidget {
       stream: _userStream(context),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return _buildEmptyState();
         }
 
         final user = snapshot.data;
-
-        // Улучшенная проверка данных пользователя
-        if (user == null || user.username.isEmpty || user.email.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.calendar_today, size: 48, color: Colors.grey),
-                SizedBox(height: 16),
-                Text('Данные пользователя загружаются...',
-                    style: TextStyle(fontSize: 16)),
-                SizedBox(height: 8),
-                Text('Создайте задачи для отображения активности',
-                    style: TextStyle(fontSize: 14, color: Colors.grey)),
-              ],
-            ),
-          );
+        if (user == null || user.username.isEmpty) {
+          return _buildEmptyState();
         }
 
         // Отладочная информация о прогрессе
@@ -343,11 +302,9 @@ class GitHubCalendar extends StatelessWidget {
                                           color: color, borderRadius: BorderRadius.circular(2),
                                           border: Border.all(color: isToday ? Colors.blue.withOpacity(0.8) : const Color(0x11000000), width: isToday ? 1.5 : 1),
                                         ),
-                                        child:
-                                        Tooltip(
+                                        child: Tooltip(
                                           message: '${DateFormat('dd MMM yyyy').format(date)}\n'
-                                              '${count} '  // ← Используем переменную count
-                                              '${_getContributionText(count)}'  // ← Используем переменную count
+                                              '${count} ${_getContributionText(count)}'
                                               '${isToday ? ' (сегодня)' : ''}',
                                           child: const SizedBox.expand(),
                                         ),
@@ -389,6 +346,24 @@ class GitHubCalendar extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  // ДОБАВЬТЕ этот метод в класс GitHubCalendar ПОСЛЕ build метода:
+  Widget _buildEmptyState() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.calendar_today, size: 48, color: Colors.grey),
+          SizedBox(height: 16),
+          Text('Данные пользователя загружаются...',
+              style: TextStyle(fontSize: 16)),
+          SizedBox(height: 8),
+          Text('Создайте задачи для отображения активности',
+              style: TextStyle(fontSize: 14, color: Colors.grey)),
+        ],
+      ),
     );
   }
 
