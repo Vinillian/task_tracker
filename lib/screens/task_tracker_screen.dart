@@ -13,6 +13,7 @@ import '../repositories/local_repository.dart';
 import '../models/task.dart';
 import '../models/stage.dart';
 import '../models/step.dart' as custom_step;
+import '../services/completion_service.dart';
 
 class TaskTrackerScreen extends StatefulWidget {
   const TaskTrackerScreen({super.key});
@@ -340,9 +341,18 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     final task = completionResult['task'];
     final stage = completionResult['stage'];
 
-    // Создаем глубокую копию пользователя для иммутабельного обновления
+    // Используем CompletionService для обработки
+    final result = CompletionService.completeItemWithHistory(
+      item: completedItem,
+      stepsAdded: 1, // По умолчанию +1 шаг
+      itemName: CompletionService.getItemName(completedItem),
+      itemType: CompletionService.getItemType(completedItem),
+      currentHistory: currentUser!.progressHistory,
+    );
+
+    // Обновляем проекты
     final updatedProjects = currentUser!.projects.map((p) => p.name == project?.name
-        ? _updateProjectWithCompletion(p, completedItem, task, stage)
+        ? _updateProjectWithCompletion(p, result['updatedItem'], task, stage)
         : p
     ).toList();
 
@@ -351,11 +361,19 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
         username: currentUser!.username,
         email: currentUser!.email,
         projects: updatedProjects,
-        progressHistory: currentUser!.progressHistory,
+        progressHistory: result['updatedHistory'],
       );
     });
 
     _saveCurrentUser();
+
+    // Показываем уведомление
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('✅ ${CompletionService.getItemName(completedItem)} выполнено!'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   Project _updateProjectWithCompletion(Project project, dynamic completedItem, Task? parentTask, Stage? parentStage) {

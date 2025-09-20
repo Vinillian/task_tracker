@@ -66,19 +66,20 @@ class CompletionService {
     return item.name;
   }
 
-  static Map<String, dynamic> completeItemWithHistory(
-      dynamic item, {
-        required int stepsAdded,
-        required String itemName,
-        required String itemType,
-        required List<dynamic> currentHistory,
-      }) {
+  static Map<String, dynamic> completeItemWithHistory({
+    required dynamic item,
+    required int stepsAdded,
+    required String itemName,
+    required String itemType,
+    required List<dynamic> currentHistory,
+  }) {
     final result = completeItem(
       item,
       stepsAdded: stepsAdded,
       itemName: itemName,
       itemType: itemType,
     );
+
     // Добавляем в историю только если были реальные изменения
     if (result['progressHistory'].stepsAdded != 0) {
       final updatedHistory = List<dynamic>.from(currentHistory)
