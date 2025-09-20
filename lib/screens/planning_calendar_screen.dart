@@ -5,6 +5,7 @@ import '../models/task.dart';
 import '../models/stage.dart';
 import '../models/step.dart' as custom_step;
 import '../models/project.dart';
+import '../services/recurrence_service.dart';
 
 class PlanningCalendarScreen extends StatelessWidget {
   final AppUser? currentUser;
@@ -16,41 +17,89 @@ class PlanningCalendarScreen extends StatelessWidget {
     // 1. Собираем все запланированные элементы
     final plannedItems = <_PlannedItem>[];
 
-    // ЗАМЕНИТЬ текущий метод addTaskItems на:
-    void addTaskItems(Project project, Task task) {
-      if (task.plannedDate != null) {
+    // Сначала объявляем вспомогательные методы
+    void _addTaskOccurrences(Project project, Task task, DateTime startDate) {
+      final occurrences = task.recurrence != null
+          ? RecurrenceService.generateOccurrences(
+        recurrence: task.recurrence!,
+        startDate: startDate,
+        untilDate: DateTime.now().add(const Duration(days: 30)),
+      )
+          : [startDate];
+
+      for (final date in occurrences) {
         plannedItems.add(_PlannedItem(
           type: 'Задача',
           name: task.name,
-          date: task.plannedDate!,
+          date: date,
           projectName: project.name,
+          isRecurring: task.recurrence != null,
           onTap: () => _showCompletionDialog(context, task, project),
         ));
       }
+    }
 
+    void _addStageOccurrences(Project project, Task task, Stage stage, DateTime startDate) {
+      final occurrences = stage.recurrence != null
+          ? RecurrenceService.generateOccurrences(
+        recurrence: stage.recurrence!,
+        startDate: startDate,
+        untilDate: DateTime.now().add(const Duration(days: 30)),
+      )
+          : [startDate];
+
+      for (final date in occurrences) {
+        plannedItems.add(_PlannedItem(
+          type: 'Этап',
+          name: stage.name,
+          date: date,
+          projectName: project.name,
+          taskName: task.name,
+          isRecurring: stage.recurrence != null,
+          onTap: () => _showCompletionDialog(context, stage, project, task),
+        ));
+      }
+    }
+
+    void _addStepOccurrences(Project project, Task task, Stage stage, custom_step.Step step, DateTime startDate) {
+      final occurrences = step.recurrence != null
+          ? RecurrenceService.generateOccurrences(
+        recurrence: step.recurrence!,
+        startDate: startDate,
+        untilDate: DateTime.now().add(const Duration(days: 30)),
+      )
+          : [startDate];
+
+      for (final date in occurrences) {
+        plannedItems.add(_PlannedItem(
+          type: 'Шаг',
+          name: step.name,
+          date: date,
+          projectName: project.name,
+          taskName: task.name,
+          stageName: stage.name,
+          isRecurring: step.recurrence != null,
+          onTap: () => _showCompletionDialog(context, step, project, task, stage),
+        ));
+      }
+    }
+
+    // Затем объявляем основной метод, который использует вспомогательные
+    void addTaskItems(Project project, Task task) {
+      // Добавляем основную задачу, если у нее есть plannedDate
+      if (task.plannedDate != null) {
+        _addTaskOccurrences(project, task, task.plannedDate!);
+      }
+
+      // Добавляем этапы и шаги
       for (final stage in task.stages) {
         if (stage.plannedDate != null) {
-          plannedItems.add(_PlannedItem(
-            type: 'Этап',
-            name: stage.name,
-            date: stage.plannedDate!,
-            projectName: project.name,
-            taskName: task.name,
-            onTap: () => _showCompletionDialog(context, stage, project, task),
-          ));
+          _addStageOccurrences(project, task, stage, stage.plannedDate!);
         }
 
         for (final step in stage.steps) {
           if (step.plannedDate != null) {
-            plannedItems.add(_PlannedItem(
-              type: 'Шаг',
-              name: step.name,
-              date: step.plannedDate!,
-              projectName: project.name,
-              taskName: task.name,
-              stageName: stage.name,
-              onTap: () => _showCompletionDialog(context, step, project, task, stage),
-            ));
+            _addStepOccurrences(project, task, stage, step, step.plannedDate!);
           }
         }
       }
@@ -116,7 +165,13 @@ class PlanningCalendarScreen extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: ListTile(
         leading: _getIconForType(item.type),
-        title: Text(item.name),
+        title: Row(
+          children: [
+            Expanded(child: Text(item.name)),
+            if (item.isRecurring)
+              const Icon(Icons.repeat, size: 16, color: Colors.blue),
+          ],
+        ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -124,6 +179,7 @@ class PlanningCalendarScreen extends StatelessWidget {
             if (item.taskName != null) Text('Задача: ${item.taskName}'),
             if (item.stageName != null) Text('Этап: ${item.stageName}'),
             Text('На: ${DateFormat('HH:mm').format(item.date)}'),
+            if (item.isRecurring) const Text('Повторяющаяся', style: TextStyle(color: Colors.blue)),
           ],
         ),
         trailing: IconButton(
@@ -176,6 +232,7 @@ class _PlannedItem {
   final String projectName;
   final String? taskName;
   final String? stageName;
+  final bool isRecurring;
   final VoidCallback onTap;
 
   _PlannedItem({
@@ -185,6 +242,7 @@ class _PlannedItem {
     required this.projectName,
     this.taskName,
     this.stageName,
+    this.isRecurring = false,
     required this.onTap,
   });
 }
