@@ -6,6 +6,7 @@ import '../models/stage.dart';
 import '../models/step.dart' as custom_step;
 import '../models/project.dart';
 import '../services/recurrence_service.dart';
+import '../widgets/detailed_completion_dialog.dart';
 
 class PlanningCalendarScreen extends StatelessWidget {
   final AppUser? currentUser;
@@ -206,21 +207,24 @@ class PlanningCalendarScreen extends StatelessWidget {
   }
 
   // Заглушка для диалога выполнения (будет реализована на следующем этапе)
+  // ЗАМЕНИТЬ метод _showCompletionDialog на:
   void _showCompletionDialog(BuildContext context, dynamic item,
       [Project? project, Task? task, Stage? stage]) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Функция в разработке'),
-        content: const Text('Детальный диалог выполнения будет реализован на следующем этапе.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
+      builder: (context) => DetailedCompletionDialog(
+        item: item,
+        project: project,
+        task: task,
+        stage: stage,
       ),
-    );
+    ).then((result) {
+      if (result != null) {
+        // Обработка результата выполнения
+        print('Элемент выполнен: $result');
+        // Здесь будет логика обновления состояния
+      }
+    });
   }
 }
 
