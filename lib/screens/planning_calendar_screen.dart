@@ -206,8 +206,7 @@ class PlanningCalendarScreen extends StatelessWidget {
     }
   }
 
-  // Заглушка для диалога выполнения (будет реализована на следующем этапе)
-  // ЗАМЕНИТЬ метод _showCompletionDialog на:
+
   void _showCompletionDialog(BuildContext context, dynamic item,
       [Project? project, Task? task, Stage? stage]) {
     showDialog(
@@ -220,9 +219,9 @@ class PlanningCalendarScreen extends StatelessWidget {
       ),
     ).then((result) {
       if (result != null) {
-        // Обработка результата выполнения
-        print('Элемент выполнен: $result');
-        // Здесь будет логика обновления состояния
+        // Здесь будет логика обработки выполнения
+        print('Элемент выполнен: ${result['item']}');
+        // TODO: Интегрировать с основным состоянием приложения
       }
     });
   }

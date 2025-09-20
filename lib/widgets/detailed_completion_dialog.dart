@@ -354,8 +354,13 @@ class _DetailedCompletionDialogState extends State<DetailedCompletionDialog> {
     });
   }
 
+
   void _completeItem() {
-    // Здесь будет логика сохранения изменений
-    Navigator.of(context).pop(_currentItem);
+    Navigator.of(context).pop({
+      'item': _currentItem,
+      'project': _project,
+      'task': _task,
+      'stage': _stage,
+    });
   }
 }
