@@ -8,8 +8,11 @@ import '../models/progress_history.dart';
 import '../widgets/statistics_widgets.dart';
 import 'project_list_screen.dart';
 import 'drawer_screen.dart';
-import 'planning_calendar_screen.dart'; // ДОБАВЬТЕ ЭТОТ ИМПОРТ
+import 'planning_calendar_screen.dart';
 import '../repositories/local_repository.dart';
+import '../models/task.dart';
+import '../models/stage.dart';
+import '../models/step.dart' as custom_step;
 
 class TaskTrackerScreen extends StatefulWidget {
   const TaskTrackerScreen({super.key});
@@ -29,7 +32,7 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this); // Измените 2 на 3
+    _tabController = TabController(length: 3, vsync: this);
     _loadUserData();
   }
 
@@ -325,4 +328,88 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     _tabController.dispose();
     super.dispose();
   }
-}
+
+  void _handleItemCompletion(Map<String, dynamic> completionResult) {
+    if (completionResult['item'] == null || currentUser == null) return;
+
+    final completedItem = completionResult['item'];
+    final project = completionResult['project'];
+    final task = completionResult['task'];
+    final stage = completionResult['stage'];
+
+    // Создаем глубокую копию пользователя для иммутабельного обновления
+    final updatedProjects = currentUser!.projects.map((p) => p.name == project?.name
+        ? _updateProjectWithCompletion(p, completedItem, task, stage)
+        : p
+    ).toList();
+
+    setState(() {
+      currentUser = AppUser(
+        username: currentUser!.username,
+        email: currentUser!.email,
+        projects: updatedProjects,
+        progressHistory: currentUser!.progressHistory,
+      );
+    });
+
+    _saveCurrentUser();
+  }
+
+  Project _updateProjectWithCompletion(Project project, dynamic completedItem, Task? parentTask, Stage? parentStage) {
+    final updatedTasks = project.tasks.map((t) {
+      // Если это задача верхнего уровня
+      if (completedItem is Task && t.name == completedItem.name) {
+        return completedItem;
+      }
+
+      // Если это этап или шаг внутри задачи
+      if (parentTask != null && t.name == parentTask.name) {
+        final updatedStages = t.stages.map((s) {
+          // Если это этап
+          if (completedItem is Stage && s.name == completedItem.name) {
+            return completedItem;
+          }
+
+          // Если это шаг внутри этапа
+          if (parentStage != null && s.name == parentStage.name && completedItem is custom_step.Step) {
+            final updatedSteps = s.steps.map((step) =>
+            step.name == completedItem.name ? completedItem : step
+            ).toList();
+            return Stage(
+              name: s.name,
+              completedSteps: s.completedSteps,
+              totalSteps: s.totalSteps,
+              stageType: s.stageType,
+              isCompleted: s.isCompleted,
+              steps: updatedSteps,
+              plannedDate: s.plannedDate,
+              recurrence: s.recurrence,
+            );
+          }
+
+          return s;
+        }).toList();
+
+        return Task(
+          name: t.name,
+          completedSteps: t.completedSteps,
+          totalSteps: t.totalSteps,
+          stages: updatedStages,
+          taskType: t.taskType,
+          recurrence: t.recurrence,
+          dueDate: t.dueDate,
+          isCompleted: t.isCompleted,
+          description: t.description,
+          plannedDate: t.plannedDate,
+        );
+      }
+
+      return t;
+    }).toList();
+
+    return Project(
+      name: project.name,
+      tasks: updatedTasks,
+    );
+  }
+  }

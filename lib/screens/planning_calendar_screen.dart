@@ -7,6 +7,7 @@ import '../models/step.dart' as custom_step;
 import '../models/project.dart';
 import '../services/recurrence_service.dart';
 import '../widgets/detailed_completion_dialog.dart';
+import 'task_tracker_screen.dart';
 
 class PlanningCalendarScreen extends StatelessWidget {
   final AppUser? currentUser;
@@ -207,6 +208,7 @@ class PlanningCalendarScreen extends StatelessWidget {
   }
 
 
+  // ЗАМЕНИТЬ метод _showCompletionDialog на:
   void _showCompletionDialog(BuildContext context, dynamic item,
       [Project? project, Task? task, Stage? stage]) {
     showDialog(
@@ -219,9 +221,8 @@ class PlanningCalendarScreen extends StatelessWidget {
       ),
     ).then((result) {
       if (result != null) {
-        // Здесь будет логика обработки выполнения
-        print('Элемент выполнен: ${result['item']}');
-        // TODO: Интегрировать с основным состоянием приложения
+        print('Элемент выполнен: $result');
+        // TODO: Реализовать интеграцию с состоянием
       }
     });
   }
