@@ -28,6 +28,7 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
   DateTime? _plannedDate;
   Recurrence? _plannedRecurrence;
 
+
   @override
   void initState() {
     super.initState();
@@ -39,6 +40,7 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
       _recurrence = widget.initialTask!.recurrence;
       _dueDate = widget.initialTask!.dueDate;
       _plannedDate = widget.initialTask!.plannedDate;
+      _plannedDate = widget.initialTask?.plannedDate;
     } else {
       _stepsController.text = '1';
     }
@@ -101,13 +103,13 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
             ),
             ListTile(
               title: Text(_plannedDate == null
-                  ? 'Запланировать дату'
+                  ? 'Запланировать дату выполнения'  // Измененный текст
                   : 'Запланировано: ${DateFormat('dd.MM.yyyy').format(_plannedDate!)}'),
               trailing: const Icon(Icons.calendar_today),
               onTap: () async {
                 final date = await showDatePicker(
                   context: context,
-                  initialDate: _plannedDate ?? DateTime.now(),
+                  initialDate: _plannedDate ?? _dueDate ?? DateTime.now(),  // Исправлено здесь
                   firstDate: DateTime.now(),
                   lastDate: DateTime.now().add(const Duration(days: 365)),
                 );
