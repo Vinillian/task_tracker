@@ -14,6 +14,7 @@ import '../models/task.dart';
 import '../models/stage.dart';
 import '../models/step.dart' as custom_step;
 import '../services/completion_service.dart';
+import 'calendar_screen.dart'; // Добавьте эту строку в импорты
 
 class TaskTrackerScreen extends StatefulWidget {
   const TaskTrackerScreen({super.key});
@@ -33,7 +34,7 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _loadUserData();
   }
 
@@ -253,6 +254,7 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
             Tab(icon: Icon(Icons.list), text: 'Проекты'),
             Tab(icon: Icon(Icons.bar_chart), text: 'Статистика'),
             Tab(icon: Icon(Icons.calendar_today), text: 'Планирование'),
+            Tab(icon: Icon(Icons.calendar_month), text: 'Календарь'),
           ],
         ),
       ),
@@ -288,7 +290,8 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
             child: RefreshIndicator(
               key: _refreshIndicatorKey,
               onRefresh: _refreshData,
-              child: TabBarView(
+              child:
+              TabBarView(
                 controller: _tabController,
                 children: [
                   currentUser != null
@@ -308,6 +311,12 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
                       : const Center(child: CircularProgressIndicator()),
                   currentUser != null
                       ? PlanningCalendarScreen(
+                    currentUser: currentUser,
+                    onItemCompleted: _handleItemCompletion,
+                  )
+                      : const Center(child: CircularProgressIndicator()),
+                  currentUser != null
+                      ? CalendarScreen(
                     currentUser: currentUser,
                     onItemCompleted: _handleItemCompletion,
                   )
