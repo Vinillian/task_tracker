@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:intl/intl.dart';
 import '../models/app_user.dart';
 import '../models/task.dart';
 import '../models/stage.dart';
 import '../models/step.dart' as custom_step;
 import '../widgets/detailed_completion_dialog.dart';
 import '../services/recurrence_service.dart';
-import 'package:intl/intl.dart';
 
 class CalendarScreen extends StatefulWidget {
   final AppUser? currentUser;
@@ -189,6 +189,32 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return Scaffold(
       body: Column(
         children: [
+          // Быстрое переключение месяцев
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.arrow_back),
+                  onPressed: () => setState(() {
+                    _focusedDay = DateTime(_focusedDay.year, _focusedDay.month - 1);
+                  }),
+                ),
+                Text(
+                  DateFormat('MMMM yyyy').format(_focusedDay),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                IconButton(
+                  icon: Icon(Icons.arrow_forward),
+                  onPressed: () => setState(() {
+                    _focusedDay = DateTime(_focusedDay.year, _focusedDay.month + 1);
+                  }),
+                ),
+              ],
+            ),
+          ),
+
           TableCalendar(
             firstDay: DateTime.now().subtract(const Duration(days: 365)),
             lastDay: DateTime.now().add(const Duration(days: 365)),
@@ -196,7 +222,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
             calendarFormat: _calendarFormat,
             eventLoader: (day) => plannedItems[day] ?? [],
             selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-            // ДОБАВЬ ЭТОТ БЛОК:
+
+            headerStyle: HeaderStyle(
+              formatButtonVisible: false,
+              titleCentered: true,
+              leftChevronIcon: Icon(Icons.chevron_left),
+              rightChevronIcon: Icon(Icons.chevron_right),
+            ),
+
             onDaySelected: (selectedDay, focusedDay) {
               print('📅 Выбран день: $selectedDay');
               print('🔍 Ищем задачи для: ${DateTime(selectedDay.year, selectedDay.month, selectedDay.day)}');
@@ -207,20 +240,72 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 _focusedDay = focusedDay;
               });
             },
+
+            onDayLongPressed: (selectedDay, focusedDay) {
+              final items = plannedItems[selectedDay] ?? [];
+              if (items.isNotEmpty) {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Text('Задачи на ${DateFormat('dd.MM.yyyy').format(selectedDay)}'),
+                    content: SizedBox(
+                      width: double.maxFinite,
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: items.map((item) => ListTile(
+                          leading: Icon(
+                            item['type'] == 'task' ? Icons.task :
+                            item['type'] == 'stage' ? Icons.album : Icons.star,
+                            size: 20,
+                            color: Colors.blue,
+                          ),
+                          title: Text(item['name']),
+                          subtitle: Text('Тип: ${item['type']}'),
+                        )).toList(),
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text('Закрыть'),
+                      ),
+                    ],
+                  ),
+                );
+              }
+            },
+
             onFormatChanged: (format) {
               setState(() {
                 _calendarFormat = format;
               });
             },
+
             onPageChanged: (focusedDay) {
               _focusedDay = focusedDay;
             },
+
             calendarBuilders: CalendarBuilders(
+              todayBuilder: (context, date, events) {
+                return Container(
+                  margin: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    border: Border.all(color: Colors.blue),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${date.day}',
+                      style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                );
+              },
+
               markerBuilder: (context, day, events) {
                 if (events.isNotEmpty) {
-                  // Приводим тип events к List<Map<String, dynamic>>
                   final typedEvents = events.cast<Map<String, dynamic>>();
-
                   final taskCount = typedEvents.where((e) => e['type'] == 'task').length;
                   final stageCount = typedEvents.where((e) => e['type'] == 'stage').length;
                   final stepCount = typedEvents.where((e) => e['type'] == 'step').length;
@@ -273,12 +358,19 @@ class _CalendarScreenState extends State<CalendarScreen> {
               },
             ),
           ),
+
           Expanded(
             child: _selectedDay == null
                 ? const Center(child: Text('Выберите день для просмотра задач'))
                 : Column(
               children: [
-                Text('Задачи на ${DateFormat('dd.MM.yyyy').format(_selectedDay!)}: ${selectedItems.length}'),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    'Задачи на ${DateFormat('dd.MM.yyyy').format(_selectedDay!)}: ${selectedItems.length}',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
                 Expanded(
                   child: ListView.builder(
                     itemCount: selectedItems.length,
@@ -286,10 +378,26 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       final item = selectedItems[index];
                       print('📋 Отображаем задачу: ${item['name']}');
                       return ListTile(
-                        title: Text(item['name']),
-                        subtitle: Text('Тип: ${item['type']}'),
+                        leading: Icon(
+                          item['type'] == 'task' ? Icons.task :
+                          item['type'] == 'stage' ? Icons.album : Icons.star,
+                          color: Colors.blue,
+                        ),
+                        title: Text(
+                          item['name'],
+                          style: TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Тип: ${item['type']}'),
+                            if (item['isRecurring'] ?? false)
+                              Text('🔄 Повторяющаяся',
+                                  style: TextStyle(color: Colors.green, fontSize: 12)),
+                          ],
+                        ),
                         trailing: IconButton(
-                          icon: const Icon(Icons.check),
+                          icon: Icon(Icons.check, color: Colors.green),
                           onPressed: () => _showCompletionDialog(context, item),
                         ),
                         onTap: () => _showCompletionDialog(context, item),
