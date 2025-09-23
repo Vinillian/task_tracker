@@ -51,7 +51,7 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
       _recurrence = widget.initialTask!.recurrence;
       _dueDate = widget.initialTask!.dueDate;
       _plannedDate = widget.initialTask!.plannedDate;
-      _selectedColor = widget.initialTask!.colorValue;
+      _selectedColor = widget.initialTask!.colorValue ?? 0xFF2196F3; // ← ДОБАВИТЬ ?? 0xFF2196F3
     } else {
       _stepsController.text = '1';
     }

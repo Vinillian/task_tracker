@@ -27,7 +27,7 @@ class TaskAdapter extends TypeAdapter<Task> {
       isCompleted: fields[7] as bool,
       description: fields[8] as String?,
       plannedDate: fields[9] as DateTime?,
-      colorValue: fields[10] as int,
+      colorValue: fields[10] as int?,
     );
   }
 

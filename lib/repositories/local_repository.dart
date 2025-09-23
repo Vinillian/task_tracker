@@ -1,9 +1,10 @@
-import 'dart:convert'; // ← ДОБАВИТЬ для jsonEncode/jsonDecode
+import 'dart:convert';
+import 'dart:io'; // ← ДОБАВИТЬ ДЛЯ File
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:hive_flutter/hive_flutter.dart'; // ← ДОБАВИТЬ для initFlutter
-import 'package:cloud_firestore/cloud_firestore.dart'; // ← ДОБАВИТЬ
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/app_user.dart';
 import '../models/project.dart';
 import '../models/task.dart';
@@ -23,9 +24,10 @@ class LocalRepository {
     if (_isInitialized) return;
 
     try {
+      print('🔄 Инициализация Hive...');
+
       // Инициализация для Web и мобильных
       if (kIsWeb) {
-        // Для Web используем стандартную инициализацию
         await Hive.initFlutter();
       } else {
         final appDocDir = await getApplicationDocumentsDirectory();
@@ -33,39 +35,139 @@ class LocalRepository {
       }
 
       // Регистрируем адаптеры
-      if (!Hive.isAdapterRegistered(0)) {
-        Hive.registerAdapter(AppUserAdapter());
-      }
-      if (!Hive.isAdapterRegistered(1)) {
-        Hive.registerAdapter(ProjectAdapter());
-      }
-      if (!Hive.isAdapterRegistered(2)) {
-        Hive.registerAdapter(TaskAdapter());
-      }
-      if (!Hive.isAdapterRegistered(3)) {
-        Hive.registerAdapter(StepAdapter()); // ← БЫВШИЙ SubtaskAdapter
-      }
-      if (!Hive.isAdapterRegistered(6)) {
-        Hive.registerAdapter(StageAdapter()); // ← НОВЫЙ адаптер
-      }
-      if (!Hive.isAdapterRegistered(4)) {
-        Hive.registerAdapter(ProgressHistoryAdapter());
+      _registerAdapters();
+
+      // Пробуем открыть боксы с обработкой ошибок
+      try {
+        _userBox = await Hive.openBox<AppUser>(_userBoxName);
+        _settingsBox = await Hive.openBox(_settingsBoxName);
+        print('✅ Боксы успешно открыты');
+      } catch (e) {
+        print('⚠️ Ошибка открытия боксов: $e. Очищаем поврежденные данные...');
+        await clearCorruptedData();
       }
 
+      _isInitialized = true;
+      print('✅ Hive initialized successfully');
+    } catch (e, stack) {
+      print('❌ Critical error initializing Hive: $e');
+      print('Stack trace: $stack');
 
+      // Пытаемся восстановиться
+      await Future.delayed(Duration(seconds: 1));
+      await _tryRecovery();
+    }
+  }
 
-      // Открываем боксы
+  void _registerAdapters() {
+    if (!Hive.isAdapterRegistered(0)) {
+      Hive.registerAdapter(AppUserAdapter());
+    }
+    if (!Hive.isAdapterRegistered(1)) {
+      Hive.registerAdapter(ProjectAdapter());
+    }
+    if (!Hive.isAdapterRegistered(2)) {
+      Hive.registerAdapter(TaskAdapter());
+    }
+    if (!Hive.isAdapterRegistered(3)) {
+      Hive.registerAdapter(StepAdapter());
+    }
+    if (!Hive.isAdapterRegistered(6)) {
+      Hive.registerAdapter(StageAdapter());
+    }
+    if (!Hive.isAdapterRegistered(4)) {
+      Hive.registerAdapter(ProgressHistoryAdapter());
+    }
+    print('✅ Адаптеры зарегистрированы');
+  }
+
+  Future<void> _tryRecovery() async {
+    try {
+      print('🔄 Попытка восстановления...');
+      await Hive.close();
+
+      if (kIsWeb) {
+        await Hive.initFlutter();
+      } else {
+        final appDocDir = await getApplicationDocumentsDirectory();
+        Hive.init(appDocDir.path);
+      }
+
+      _registerAdapters();
+
+      // Пробуем открыть снова
       _userBox = await Hive.openBox<AppUser>(_userBoxName);
       _settingsBox = await Hive.openBox(_settingsBoxName);
 
       _isInitialized = true;
-      print('✅ Hive initialized successfully');
+      print('✅ Восстановление успешно');
     } catch (e) {
-      print('❌ Error initializing Hive: $e');
-      rethrow;
+      print('❌ Восстановление не удалось: $e');
+      // Создаем пустые боксы в памяти как запасной вариант
+      try {
+        _userBox = await Hive.openBox<AppUser>('userData_memory');
+        _settingsBox = await Hive.openBox('settings_memory');
+        _isInitialized = true;
+        print('✅ Созданы резервные боксы в памяти');
+      } catch (e) {
+        print('❌ Критическая ошибка: $e');
+        rethrow;
+      }
     }
   }
 
+  Future<void> clearCorruptedData() async {
+    try {
+      print('🔄 Очистка поврежденных данных...');
+
+      // Закрываем боксы если они открыты
+      try {
+        await _userBox.close();
+        await _settingsBox.close();
+      } catch (e) {
+        print('⚠️ Ошибка закрытия боксов: $e');
+      }
+
+      // Удаляем файлы данных (только для мобильных)
+      if (!kIsWeb) {
+        try {
+          final appDocDir = await getApplicationDocumentsDirectory();
+          final userBoxFile = File('${appDocDir.path}/userData.hive');
+          final settingsBoxFile = File('${appDocDir.path}/settings.hive');
+          final userBoxLockFile = File('${appDocDir.path}/userData.lock');
+          final settingsBoxLockFile = File('${appDocDir.path}/settings.lock');
+
+          if (await userBoxFile.exists()) {
+            await userBoxFile.delete();
+            print('✅ Удален userData.hive');
+          }
+          if (await settingsBoxFile.exists()) {
+            await settingsBoxFile.delete();
+            print('✅ Удален settings.hive');
+          }
+          if (await userBoxLockFile.exists()) {
+            await userBoxLockFile.delete();
+            print('✅ Удален userData.lock');
+          }
+          if (await settingsBoxLockFile.exists()) {
+            await settingsBoxLockFile.delete();
+            print('✅ Удален settings.lock');
+          }
+        } catch (e) {
+          print('⚠️ Ошибка удаления файлов: $e');
+        }
+      }
+
+      // Переоткрываем боксы
+      _userBox = await Hive.openBox<AppUser>(_userBoxName);
+      _settingsBox = await Hive.openBox(_settingsBoxName);
+
+      print('✅ Поврежденные данные очищены');
+    } catch (e) {
+      print('❌ Ошибка очистки данных: $e');
+      rethrow;
+    }
+  }
 
   // Сохранение пользователя
   Future<void> saveUser(AppUser user) async {
@@ -80,7 +182,12 @@ class LocalRepository {
 
   // Загрузка пользователя
   AppUser? loadUser() {
-    return _userBox.get('currentUser');
+    try {
+      return _userBox.get('currentUser');
+    } catch (e) {
+      print('❌ Ошибка загрузки пользователя: $e');
+      return null;
+    }
   }
 
   // Экспорт в JSON
@@ -90,15 +197,11 @@ class LocalRepository {
       throw Exception('No user data to export');
     }
 
-    // Конвертируем данные, заменяя Timestamp на DateTime
     final jsonMap = _convertToJsonCompatible(user.toFirestore());
-
-    // ✅ КРАСИВОЕ ФОРМАТИРОВАНИЕ JSON
     final jsonEncoder = JsonEncoder.withIndent('  ');
     return jsonEncoder.convert(jsonMap);
   }
 
-  // Вспомогательный метод для конвертации Timestamp -> DateTime
   Map<String, dynamic> _convertToJsonCompatible(Map<String, dynamic> data) {
     final result = Map<String, dynamic>.from(data);
 
@@ -128,58 +231,29 @@ class LocalRepository {
 
     try {
       final cleanedJsonString = jsonString.trim();
-      print('✅ JSON очищен, длина: ${cleanedJsonString.length} символов');
 
-      // Логируем начало строки для диагностики
-      if (cleanedJsonString.length > 100) {
-        print('📝 Начало JSON: ${cleanedJsonString.substring(0, 100)}...');
-      } else {
-        print('📝 Весь JSON: $cleanedJsonString');
-      }
-
-      // Проверяем, что это валидный JSON
       if (!cleanedJsonString.startsWith('{') || !cleanedJsonString.endsWith('}')) {
-        print('❌ Неверный формат JSON: должен начинаться с { и заканчиваться }');
         throw Exception('Неверный формат JSON файла');
       }
 
       final jsonMap = jsonDecode(cleanedJsonString) as Map<String, dynamic>;
-      print('✅ JSON успешно распарсен');
 
-      // ✅ ПРОВЕРЯЕМ ОБЯЗАТЕЛЬНЫЕ ПОЛЯ с логированием
       if (jsonMap['username'] == null) {
-        print('❌ Отсутствует обязательное поле: username');
         throw Exception('Неверный формат данных: отсутствует поле username');
       }
       if (jsonMap['email'] == null) {
-        print('❌ Отсутствует обязательное поле: email');
         throw Exception('Неверный формат данных: отсутствует поле email');
       }
-      if (jsonMap['projects'] == null) {
-        print('❌ Отсутствует обязательное поле: projects');
-        throw Exception('Неверный формат данных: отсутствует поле projects');
-      }
-
-      print('📊 Загружаем данные пользователя: ${jsonMap['username']}');
-      print('📧 Email: ${jsonMap['email']}');
-      print('📦 Проектов: ${jsonMap['projects'] is List ? (jsonMap['projects'] as List).length : 'неверный формат'}');
 
       final user = AppUser.fromFirestore(jsonMap);
       await saveUser(user);
 
       print('✅ Импорт успешен: ${user.username}, проектов: ${user.projects.length}');
-      print('📈 Записей в истории: ${user.progressHistory.length}');
-
       return user;
 
-      // Исправляем обработку ошибок в importFromJson
     } on FormatException catch (e) {
-      print('❌ Ошибка формата JSON: $e');
-      // Убираем e.stackTrace, так как его нет в FormatException
       throw Exception('Неверный формат JSON: $e');
     } catch (e) {
-      print('❌ Неожиданная ошибка импорта JSON: $e');
-      // Для общего исключения можно использовать stackTrace если нужно
       throw Exception('Ошибка импорта: $e');
     }
   }

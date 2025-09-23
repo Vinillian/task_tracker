@@ -2,7 +2,7 @@ import 'stage.dart';
 import 'package:hive/hive.dart';
 import 'task_type.dart';
 import 'recurrence.dart';
-import 'package:flutter/material.dart'; // ← ДОБАВИТЬ ЭТУ СТРОКУ
+import 'package:flutter/material.dart';
 part 'task.g.dart';
 
 @HiveType(typeId: 2)
@@ -17,7 +17,7 @@ class Task {
   final int totalSteps;
 
   @HiveField(3)
-  final List<Stage> stages; // ← ИЗМЕНИЛИ с subtasks на stages
+  final List<Stage> stages;
 
   @HiveField(4)
   final String taskType;
@@ -37,9 +37,8 @@ class Task {
   @HiveField(9)
   final DateTime? plannedDate;
 
-  @HiveField(10) // Новое поле - следующий доступный номер
-  final int colorValue; // Будем хранить как int (цвет в формате 0xAARRGGBB)
-
+  @HiveField(10)
+  final int? colorValue; // ← Сделать nullable
 
   Task({
     required this.name,
@@ -52,11 +51,11 @@ class Task {
     this.isCompleted = false,
     this.description,
     this.plannedDate,
-    this.colorValue = 0xFF2196F3, // Синий по умолчанию
+    this.colorValue, // ← Убрать значение по умолчанию
   }) : stages = stages ?? [];
 
-  // Добавляем геттер для удобства
-  Color get color => Color(colorValue);
+  // Обновить геттер для обработки null
+  Color get color => colorValue != null ? Color(colorValue!) : Colors.blue;
 
   Map<String, dynamic> toFirestore() {
     return {
@@ -69,8 +68,8 @@ class Task {
       'dueDate': dueDate?.toIso8601String(),
       'isCompleted': isCompleted,
       'description': description,
-      'plannedDate': plannedDate?.toIso8601String(), // Добавлено
-      'colorValue': colorValue, // Добавляем цвет
+      'plannedDate': plannedDate?.toIso8601String(),
+      'colorValue': colorValue ?? 0xFF2196F3, // Значение по умолчанию при сохранении
     };
   }
 
@@ -91,10 +90,10 @@ class Task {
           : null,
       isCompleted: data['isCompleted'] ?? false,
       description: data['description'],
-      plannedDate: data['plannedDate'] != null // Добавлено
+      plannedDate: data['plannedDate'] != null
           ? DateTime.parse(data['plannedDate'])
           : null,
-      colorValue: data['colorValue'] ?? 0xFF2196F3, // Новое поле
+      colorValue: data['colorValue'] ?? 0xFF2196F3, // Значение по умолчанию при загрузке
     );
   }
 }
