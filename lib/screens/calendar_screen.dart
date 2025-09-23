@@ -189,32 +189,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return Scaffold(
       body: Column(
         children: [
-          // Быстрое переключение месяцев
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  icon: Icon(Icons.arrow_back),
-                  onPressed: () => setState(() {
-                    _focusedDay = DateTime(_focusedDay.year, _focusedDay.month - 1);
-                  }),
-                ),
-                Text(
-                  DateFormat('MMMM yyyy').format(_focusedDay),
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                IconButton(
-                  icon: Icon(Icons.arrow_forward),
-                  onPressed: () => setState(() {
-                    _focusedDay = DateTime(_focusedDay.year, _focusedDay.month + 1);
-                  }),
-                ),
-              ],
-            ),
-          ),
-
           TableCalendar(
             firstDay: DateTime.now().subtract(const Duration(days: 365)),
             lastDay: DateTime.now().add(const Duration(days: 365)),

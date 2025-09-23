@@ -8,13 +8,13 @@ import '../models/progress_history.dart';
 import '../widgets/statistics_widgets.dart';
 import 'project_list_screen.dart';
 import 'drawer_screen.dart';
-import 'planning_calendar_screen.dart';
+import 'planning_calendar_screen.dart'; // ← Должен быть этот импорт
 import '../repositories/local_repository.dart';
 import '../models/task.dart';
 import '../models/stage.dart';
 import '../models/step.dart' as custom_step;
 import '../services/completion_service.dart';
-import 'calendar_screen.dart'; // Добавьте эту строку в импорты
+import 'calendar_screen.dart';
 
 class TaskTrackerScreen extends StatefulWidget {
   const TaskTrackerScreen({super.key});
@@ -27,17 +27,20 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     with SingleTickerProviderStateMixin {
   AppUser? currentUser;
   final FirestoreService _firestoreService = FirestoreService();
-  late TabController _tabController;
+
+  // TabController делаем доступным для Drawer
+  TabController get tabController => _tabControllerInternal;
+  late TabController _tabControllerInternal;
+
   String? _saveMessage;
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabControllerInternal = TabController(length: 3, vsync: this);
     _loadUserData();
   }
-
 
   // Метод обновления данных
   Future<void> _refreshData() async {
@@ -103,6 +106,19 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     } catch (e) {
       print('❌ Неожиданная ошибка в _loadUserData: $e');
     }
+  }
+
+  // Метод для обработки завершения задач из экрана планирования
+  void _handleItemCompletionFromPlanning(Map<String, dynamic> completionResult) {
+    _handleItemCompletion(completionResult);
+
+    // Показываем уведомление
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('✅ Задача выполнена!'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   // Метод для сохранения текущего пользователя в Firestore
@@ -249,11 +265,10 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         bottom: TabBar(
-          controller: _tabController,
+          controller: _tabControllerInternal, // ← ИСПРАВИТЬ НА _tabControllerInternal
           tabs: const [
             Tab(icon: Icon(Icons.list), text: 'Проекты'),
             Tab(icon: Icon(Icons.bar_chart), text: 'Статистика'),
-            Tab(icon: Icon(Icons.calendar_today), text: 'Планирование'),
             Tab(icon: Icon(Icons.calendar_month), text: 'Календарь'),
           ],
         ),
@@ -261,6 +276,8 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
       drawer: DrawerScreen(
         userEmail: authService.currentUser?.email,
         currentUser: currentUser,
+        tabController: tabController, // ← ПЕРЕДАЕМ КОНТРОЛЛЕР
+        onItemCompletedFromPlanning: _handleItemCompletionFromPlanning, // ← ДОБАВИТЬ ЭТУ СТРОКУ
       ),
       body: Column(
         children: [
@@ -290,9 +307,8 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
             child: RefreshIndicator(
               key: _refreshIndicatorKey,
               onRefresh: _refreshData,
-              child:
-              TabBarView(
-                controller: _tabController,
+              child: TabBarView(
+                controller: _tabControllerInternal, // ← ИСПРАВИТЬ НА _tabControllerInternal
                 children: [
                   currentUser != null
                       ? ProjectListScreen(
@@ -308,12 +324,6 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
                       : const Center(child: CircularProgressIndicator()),
                   currentUser != null
                       ? StatisticsWidgets.buildStatisticsTab(context, currentUser)
-                      : const Center(child: CircularProgressIndicator()),
-                  currentUser != null
-                      ? PlanningCalendarScreen(
-                    currentUser: currentUser,
-                    onItemCompleted: _handleItemCompletion,
-                  )
                       : const Center(child: CircularProgressIndicator()),
                   currentUser != null
                       ? CalendarScreen(
@@ -338,7 +348,7 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _tabControllerInternal.dispose(); // ← ИСПРАВИТЬ НА _tabControllerInternal
     super.dispose();
   }
 
