@@ -2,7 +2,7 @@ import 'stage.dart';
 import 'package:hive/hive.dart';
 import 'task_type.dart';
 import 'recurrence.dart';
-
+import 'package:flutter/material.dart'; // ← ДОБАВИТЬ ЭТУ СТРОКУ
 part 'task.g.dart';
 
 @HiveType(typeId: 2)
@@ -37,6 +37,9 @@ class Task {
   @HiveField(9)
   final DateTime? plannedDate;
 
+  @HiveField(10) // Новое поле - следующий доступный номер
+  final int colorValue; // Будем хранить как int (цвет в формате 0xAARRGGBB)
+
 
   Task({
     required this.name,
@@ -44,12 +47,16 @@ class Task {
     required this.totalSteps,
     List<Stage>? stages,
     this.taskType = 'stepByStep',
-    this.recurrence, // Уже есть
+    this.recurrence,
     this.dueDate,
     this.isCompleted = false,
     this.description,
-    this.plannedDate, // Добавлено
+    this.plannedDate,
+    this.colorValue = 0xFF2196F3, // Синий по умолчанию
   }) : stages = stages ?? [];
+
+  // Добавляем геттер для удобства
+  Color get color => Color(colorValue);
 
   Map<String, dynamic> toFirestore() {
     return {
@@ -63,6 +70,7 @@ class Task {
       'isCompleted': isCompleted,
       'description': description,
       'plannedDate': plannedDate?.toIso8601String(), // Добавлено
+      'colorValue': colorValue, // Добавляем цвет
     };
   }
 
@@ -86,6 +94,7 @@ class Task {
       plannedDate: data['plannedDate'] != null // Добавлено
           ? DateTime.parse(data['plannedDate'])
           : null,
+      colorValue: data['colorValue'] ?? 0xFF2196F3, // Новое поле
     );
   }
 }
