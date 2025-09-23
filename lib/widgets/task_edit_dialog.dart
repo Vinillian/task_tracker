@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../models/task.dart';
 import '../models/task_type.dart';
 import '../models/recurrence.dart';
+import 'dart:math'; // ← ДОБАВИТЬ ДЛЯ PI И ТРИГОНОМЕТРИЧЕСКИХ ФУНКЦИЙ
 
 // Вспомогательный класс для хранения информации о цвете (ВЫНЕСТИ ЗА ПРЕДЕЛЫ КЛАССА)
 class _ColorOption {
@@ -161,88 +162,94 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
     );
   }
 
-  Widget _buildColorPicker() {
-    final colors = [
-      _ColorOption('Красный', 0xFFF44336, Icons.circle, Colors.red),
-      _ColorOption('Розовый', 0xFFE91E63, Icons.circle, Colors.pink),
-      _ColorOption('Фиолетовый', 0xFF9C27B0, Icons.circle, Colors.purple),
-      _ColorOption('Глубокий фиолетовый', 0xFF673AB7, Icons.circle, Colors.deepPurple),
-      _ColorOption('Индиго', 0xFF3F51B5, Icons.circle, Colors.indigo),
-      _ColorOption('Синий', 0xFF2196F3, Icons.circle, Colors.blue),
-      _ColorOption('Голубой', 0xFF03A9F4, Icons.circle, Colors.lightBlue),
-      _ColorOption('Бирюзовый', 0xFF00BCD4, Icons.circle, Colors.cyan),
-      _ColorOption('Зеленый', 0xFF009688, Icons.circle, Colors.teal),
-      _ColorOption('Светло-зеленый', 0xFF4CAF50, Icons.circle, Colors.green),
-      _ColorOption('Лаймовый', 0xFF8BC34A, Icons.circle, Colors.lightGreen),
-      _ColorOption('Желтый', 0xFFCDDC39, Icons.circle, Colors.yellow),
-      _ColorOption('Янтарный', 0xFFFFC107, Icons.circle, Colors.amber),
-      _ColorOption('Оранжевый', 0xFFFF9800, Icons.circle, Colors.orange),
-      _ColorOption('Глубокий оранжевый', 0xFFFF5722, Icons.circle, Colors.deepOrange),
-      _ColorOption('Коричневый', 0xFF795548, Icons.circle, Colors.brown),
-      _ColorOption('Серый', 0xFF9E9E9E, Icons.circle, Colors.grey),
-      _ColorOption('Сине-серый', 0xFF607D8B, Icons.circle, Colors.blueGrey),
-    ];
+  bool _isColorPickerExpanded = false;
 
-    // Находим текущий выбранный цвет
-    final currentColor = colors.firstWhere(
-          (color) => color.value == _selectedColor,
-      orElse: () => colors.firstWhere((color) => color.value == 0xFF2196F3),
-    );
+  Widget _buildColorPicker() {
+    final colorMatrix = [
+      [0xFF2196F3, 0xFF03A9F4, 0xFF00BCD4, 0xFF009688, 0xFF4CAF50, 0xFF8BC34A],
+      [0xFFCDDC39, 0xFFFFC107, 0xFFFF9800, 0xFFFF5722, 0xFFF44336, 0xFFE91E63],
+      [0xFF9C27B0, 0xFF673AB7, 0xFF3F51B5, 0xFF607D8B, 0xFF9E9E9E, 0xFF795548],
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Цвет задачи:', style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        DropdownButtonFormField<_ColorOption>(
-          value: currentColor,
-          items: colors.map((colorOption) {
-            return DropdownMenuItem<_ColorOption>(
-              value: colorOption,
-              child: Row(
-                children: [
-                  Icon(
-                    colorOption.icon,
-                    color: colorOption.color,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(colorOption.name),
-                  const Spacer(),
-                  Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      color: Color(colorOption.value),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.grey.shade400),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-          onChanged: (colorOption) {
-            if (colorOption != null) {
-              setState(() {
-                _selectedColor = colorOption.value;
-              });
-            }
-          },
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+
+        // Выпадающая палитра (теперь сверху)
+        if (_isColorPickerExpanded) ...[
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Column(
+              children: colorMatrix.map((row) {
+                return Row(
+                  children: row.map((colorValue) {
+                    return Expanded(
+                      child: Container(
+                        height: 22,
+                        margin: const EdgeInsets.all(0.5),
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedColor = colorValue;
+                              _isColorPickerExpanded = false; // Закрыть после выбора
+                            });
+                          },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Color(colorValue),
+                              borderRadius: BorderRadius.circular(2),
+                              border: Border.all(
+                                color: _selectedColor == colorValue
+                                    ? Colors.black
+                                    : Colors.transparent,
+                                width: _selectedColor == colorValue ? 2 : 0,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                );
+              }).toList(),
+            ),
           ),
-          isExpanded: true,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Цвет будет отображаться в кружке прогресса задачи',
-          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+          const SizedBox(height: 12),
+        ],
+
+        // Строка с индикатором (теперь снизу)
+        Row(
+          children: [
+            // Индикатор цвета (кнопка для открытия/закрытия палитры)
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _isColorPickerExpanded = !_isColorPickerExpanded;
+                });
+              },
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Color(_selectedColor),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.black, width: 2),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
+
+
 
   void _saveTask() {
     final name = _nameController.text.trim();
