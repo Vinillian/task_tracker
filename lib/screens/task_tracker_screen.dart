@@ -8,15 +8,16 @@ import '../models/progress_history.dart';
 import '../widgets/statistics_widgets.dart';
 import 'project_list_screen.dart';
 import 'drawer_screen.dart';
-import 'planning_calendar_screen.dart'; // ← Должен быть этот импорт
+import 'planning_calendar_screen.dart';
 import '../repositories/local_repository.dart';
 import '../models/task.dart';
 import '../models/stage.dart';
 import '../models/step.dart' as custom_step;
 import '../services/completion_service.dart';
 import 'calendar_screen.dart';
-import '../widgets/task_heatmap_widget.dart'; // ← ДОБАВИТЬ
-
+import '../widgets/task_heatmap_widget.dart';
+import '../services/recurrence_service.dart'; // ← ДОБАВИТЬ
+import '../models/recurrence.dart'; // ← ДОБАВИТЬ
 
 class TaskTrackerScreen extends StatefulWidget {
   const TaskTrackerScreen({super.key});
@@ -41,8 +42,26 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
   void initState() {
     super.initState();
     _tabControllerInternal = TabController(length: 4, vsync: this);
-    _loadUserData();
+    _initializeData(); // Используем объединенный метод
   }
+
+  Future<void> _initializeData() async {
+    // Даем время на инициализацию Hive
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    // Сначала пробуем загрузить данные
+    await _loadUserData();
+
+    // Затем проверяем и восстанавливаем данные если нужно
+    final localRepo = Provider.of<LocalRepository>(context, listen: false);
+    final recovered = await localRepo.checkAndRecoverData();
+    if (recovered) {
+      print('✅ Данные восстановлены');
+      await _loadUserData(); // Перезагружаем данные
+    }
+  }
+
+
 
   // Метод обновления данных
   Future<void> _refreshData() async {
@@ -53,22 +72,25 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     await _loadUserData();
   }
 
-  // Изменяем метод чтобы возвращал Future<void>
-  // Изменяем метод чтобы возвращал Future<void>
+
   Future<void> _loadUserData() async {
     print('📥 Загрузка данных пользователя...');
     final localRepo = Provider.of<LocalRepository>(context, listen: false);
 
     try {
+      // ПЕРВОЕ: Пробуем загрузить из Hive
       final localUser = localRepo.loadUser();
       if (localUser != null && localUser.username.isNotEmpty) {
         print('✅ Используем локальные данные из Hive');
+        print('📊 Проектов: ${localUser.projects.length}, История: ${localUser.progressHistory.length}');
+
         if (mounted) {
           setState(() => currentUser = localUser);
         }
         return;
       }
 
+      // ВТОРОЕ: Если в Hive пусто, пробуем Firestore
       final authService = Provider.of<AuthService>(context, listen: false);
       final currentAuthUser = authService.currentUser;
 
@@ -81,33 +103,87 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
             final userData = userDoc.data() as Map<String, dynamic>;
             final firestoreUser = AppUser.fromFirestore(userData);
 
+            print('✅ Данные из Firestore: ${firestoreUser.projects.length} проектов');
+
             if (mounted) {
               setState(() {
                 currentUser = firestoreUser;
               });
             }
 
+            // Сохраняем в Hive для будущих загрузок
             await localRepo.saveUser(firestoreUser);
             print('✅ Данные сохранены в Hive');
-
-            if (firestoreUser.projects.isEmpty) {
-              print('ℹ️ Пользователь существует, но проекты отсутствуют');
-            }
           } else {
             print('ℹ️ Документ пользователя не существует в Firestore');
+            // Создаем пустого пользователя
+            if (mounted) {
+              setState(() {
+                currentUser = AppUser.empty();
+              });
+            }
           }
         } catch (e) {
           print('❌ Ошибка загрузки пользователя: $e');
+          // Создаем пустого пользователя как запасной вариант
           if (mounted) {
             setState(() {
               currentUser = AppUser.empty();
             });
           }
         }
+      } else {
+        print('⚠️ Нет аутентифицированного пользователя');
       }
     } catch (e) {
       print('❌ Неожиданная ошибка в _loadUserData: $e');
+      // Создаем пустого пользователя как запасной вариант
+      if (mounted) {
+        setState(() {
+          currentUser = AppUser.empty();
+        });
+      }
     }
+  }
+
+  AppUser _autoMoveDailyTasks(AppUser user) {
+    final updatedProjects = user.projects.map((project) {
+      final updatedTasks = project.tasks.map((task) {
+        // Автоматический перенос daily задач, которые ПРОСРОЧЕНЫ и не выполнены
+        if (task.recurrence?.type == RecurrenceType.daily &&
+            task.plannedDate != null &&
+            RecurrenceService.shouldMoveToNextDay(task.plannedDate!, task.recurrence!) &&
+            !task.isCompleted) {
+
+          // Для recurring задач не меняем plannedDate, только если они просрочены
+          final nextDate = RecurrenceService.getNextOccurrenceForDailyTask(task.plannedDate!, task.recurrence!);
+          return Task(
+            name: task.name,
+            completedSteps: 0,
+            totalSteps: task.totalSteps,
+            stages: task.stages,
+            taskType: task.taskType,
+            recurrence: task.recurrence,
+            dueDate: task.dueDate,
+            isCompleted: false,
+            description: task.description,
+            plannedDate: nextDate, // ⚠️ Меняем дату только для просроченных
+            colorValue: task.colorValue,
+            isTracked: task.isTracked,
+          );
+        }
+        return task;
+      }).toList();
+
+      return Project(name: project.name, tasks: updatedTasks);
+    }).toList();
+
+    return AppUser(
+      username: user.username,
+      email: user.email,
+      projects: updatedProjects,
+      progressHistory: user.progressHistory,
+    );
   }
 
   // Метод для обработки завершения задач из экрана планирования
@@ -267,11 +343,11 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         bottom: TabBar(
-          controller: _tabControllerInternal, // ← ИСПРАВИТЬ НА _tabControllerInternal
+          controller: _tabControllerInternal,
           tabs: const [
             Tab(icon: Icon(Icons.list), text: 'Проекты'),
             Tab(icon: Icon(Icons.bar_chart), text: 'Статистика'),
-            Tab(icon: Icon(Icons.analytics), text: 'Аналитика'), // ← НОВАЯ ВКЛАДКА
+            Tab(icon: Icon(Icons.analytics), text: 'Аналитика'),
             Tab(icon: Icon(Icons.calendar_month), text: 'Календарь'),
           ],
         ),
@@ -279,8 +355,8 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
       drawer: DrawerScreen(
         userEmail: authService.currentUser?.email,
         currentUser: currentUser,
-        tabController: tabController, // ← ПЕРЕДАЕМ КОНТРОЛЛЕР
-        onItemCompletedFromPlanning: _handleItemCompletionFromPlanning, // ← ДОБАВИТЬ ЭТУ СТРОКУ
+        tabController: tabController,
+        onItemCompletedFromPlanning: _handleItemCompletionFromPlanning,
       ),
       body: Column(
         children: [
@@ -310,40 +386,35 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
             child: RefreshIndicator(
               key: _refreshIndicatorKey,
               onRefresh: _refreshData,
-              // ЗАМЕНИТЬ весь TabBarView на этот исправленный код:
               child: TabBarView(
                 controller: _tabControllerInternal,
                 children: [
-                  // Вкладка 0: Проекты
                   currentUser != null
                       ? ProjectListScreen(
-                          currentUser: currentUser,
-                          onUserChanged: (user) {
-                            setState(() => currentUser = user);
-                            _saveCurrentUser();
-                          },
-                          onAddProject: _addProject,
-                          onDeleteProject: _deleteProject,
-                          onAddProgressHistory: _addProgressHistory,
-                        )
+                    currentUser: currentUser,
+                    onUserChanged: (user) {
+                      setState(() => currentUser = user);
+                      _saveCurrentUser();
+                    },
+                    onAddProject: _addProject,
+                    onDeleteProject: _deleteProject,
+                    onAddProgressHistory: _addProgressHistory,
+                  )
                       : const Center(child: CircularProgressIndicator()),
-                  
-                  // Вкладка 1: Статистика  
+
                   currentUser != null
                       ? StatisticsWidgets.buildStatisticsTab(context, currentUser)
                       : const Center(child: CircularProgressIndicator()),
-                  
-                  // Вкладка 2: Аналитика (НОВАЯ)
+
                   currentUser != null
                       ? TaskHeatmapWidget(currentUser: currentUser)
                       : const Center(child: CircularProgressIndicator()),
-                  
-                  // Вкладка 3: Календарь (была вкладка 2)
+
                   currentUser != null
                       ? CalendarScreen(
-                          currentUser: currentUser,
-                          onItemCompleted: _handleItemCompletion,
-                        )
+                    currentUser: currentUser,
+                    onItemCompleted: _handleItemCompletion,
+                  )
                       : const Center(child: CircularProgressIndicator()),
                 ],
               ),
@@ -362,7 +433,7 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
 
   @override
   void dispose() {
-    _tabControllerInternal.dispose(); // ← ИСПРАВИТЬ НА _tabControllerInternal
+    _tabControllerInternal.dispose();
     super.dispose();
   }
 
@@ -374,10 +445,10 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     final task = completionResult['task'];
     final stage = completionResult['stage'];
 
-    // Используем CompletionService для обработки
-    final result = CompletionService.completeItemWithHistory(
+    // Используем новый метод с автоматическим переносом
+    final result = CompletionService.completeItemWithAutoMove(
       item: completedItem,
-      stepsAdded: 1, // По умолчанию +1 шаг
+      stepsAdded: 1,
       itemName: CompletionService.getItemName(completedItem),
       itemType: CompletionService.getItemType(completedItem),
       currentHistory: currentUser!.progressHistory,
@@ -466,4 +537,5 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
       tasks: updatedTasks,
     );
   }
-  }
+
+}

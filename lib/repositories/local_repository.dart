@@ -269,4 +269,75 @@ class LocalRepository {
     await _userBox.close();
     await _settingsBox.close();
   }
+
+  // Проверка и восстановление данных
+  Future<bool> checkAndRecoverData() async {
+    try {
+      final user = loadUser();
+      if (user == null || user.projects.isEmpty) {
+        print('⚠️ Данные пользователя отсутствуют или пусты');
+
+        // Проверяем есть ли резервная копия
+        final backup = await _checkForBackup();
+        if (backup != null) {
+          print('✅ Найдена резервная копия, восстанавливаем...');
+          await saveUser(backup);
+          return true;
+        }
+        return false;
+      }
+      return true;
+    } catch (e) {
+      print('❌ Ошибка проверки данных: $e');
+      return false;
+    }
+  }
+
+  Future<AppUser?> _checkForBackup() async {
+    try {
+      // Проверяем, инициализирован ли Hive
+      if (!Hive.isBoxOpen('userData') && !Hive.isAdapterRegistered(0)) {
+        print('⚠️ Hive не инициализирован, пропускаем поиск резервных копий');
+        return null;
+      }
+
+      // Исправление: используем правильный способ получения списка боксов
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final hiveDir = Directory(appDocDir.path);
+
+      if (!await hiveDir.exists()) {
+        print('⚠️ Директория Hive не существует');
+        return null;
+      }
+
+      final files = await hiveDir.list().toList();
+      final boxNames = files
+          .where((file) => file.path.endsWith('.hive'))
+          .map((file) => file.uri.pathSegments.last.replaceAll('.hive', ''))
+          .toList();
+
+      print('🔍 Доступные боксы: $boxNames');
+
+      for (final boxName in boxNames) {
+        if (boxName.contains('backup') || boxName.contains('user')) {
+          print('🔍 Проверяем бокс: $boxName');
+          try {
+            final box = await Hive.openBox(boxName);
+            final data = box.get('userBackup');
+            if (data != null && data is AppUser) {
+              print('✅ Найдена резервная копия в боксе $boxName');
+              await box.close();
+              return data;
+            }
+            await box.close();
+          } catch (e) {
+            print('❌ Ошибка доступа к боксу $boxName: $e');
+          }
+        }
+      }
+    } catch (e) {
+      print('❌ Ошибка поиска резервной копии: $e');
+    }
+    return null;
+  }
 }
