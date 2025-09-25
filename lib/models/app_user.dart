@@ -39,9 +39,9 @@ class AppUser {
     }).toList();
 
     return {
-      'username': username ?? '',
-      'email': email ?? '',
-      'projects': projects?.map((p) => p.toFirestore()).toList() ?? [],
+      'username': username,
+      'email': email,
+      'projects': projects.map((p) => p.toFirestore()).toList(),
       'progressHistory': migratedHistory,
     };
   }

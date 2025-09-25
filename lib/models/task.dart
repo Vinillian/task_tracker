@@ -40,6 +40,10 @@ class Task {
   @HiveField(10)
   final int? colorValue; // ← Сделать nullable
 
+  @HiveField(11) // ← НОВОЕ ПОЛЕ
+  final bool isTracked;
+
+
   Task({
     required this.name,
     this.completedSteps = 0,
@@ -52,6 +56,7 @@ class Task {
     this.description,
     this.plannedDate,
     this.colorValue, // ← Убрать значение по умолчанию
+    this.isTracked = true, // ← НОВОЕ ЗНАЧЕНИЕ ПО УМОЛЧАНИЮ
   }) : stages = stages ?? [];
 
   // Обновить геттер для обработки null
@@ -69,7 +74,8 @@ class Task {
       'isCompleted': isCompleted,
       'description': description,
       'plannedDate': plannedDate?.toIso8601String(),
-      'colorValue': colorValue ?? 0xFF2196F3, // Значение по умолчанию при сохранении
+      'colorValue': colorValue ?? 0xFF2196F3,
+      'isTracked': isTracked, // ← ДОБАВИТЬ
     };
   }
 
@@ -93,7 +99,8 @@ class Task {
       plannedDate: data['plannedDate'] != null
           ? DateTime.parse(data['plannedDate'])
           : null,
-      colorValue: data['colorValue'] ?? 0xFF2196F3, // Значение по умолчанию при загрузке
+      colorValue: data['colorValue'] ?? 0xFF2196F3,
+      isTracked: data['isTracked'] ?? true, // ← ДОБАВИТЬ
     );
   }
 }

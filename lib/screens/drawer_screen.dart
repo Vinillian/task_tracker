@@ -191,11 +191,20 @@ class DrawerScreen extends StatelessWidget {
           ),
 
           ListTile(
+            leading: const Icon(Icons.analytics),
+            title: const Text('Аналитика задач'),
+            onTap: () {
+              Navigator.pop(context);
+              tabController.animateTo(2); // ← НОВЫЙ ИНДЕКС ДЛЯ АНАЛИТИКИ
+            },
+          ),
+
+          ListTile(
             leading: const Icon(Icons.calendar_month),
             title: const Text('Календарь'),
             onTap: () {
               Navigator.pop(context);
-              tabController.animateTo(2);
+              tabController.animateTo(3);
             },
           ),
 

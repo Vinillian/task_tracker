@@ -15,6 +15,8 @@ import '../models/stage.dart';
 import '../models/step.dart' as custom_step;
 import '../services/completion_service.dart';
 import 'calendar_screen.dart';
+import '../widgets/task_heatmap_widget.dart'; // ← ДОБАВИТЬ
+
 
 class TaskTrackerScreen extends StatefulWidget {
   const TaskTrackerScreen({super.key});
@@ -38,7 +40,7 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
   @override
   void initState() {
     super.initState();
-    _tabControllerInternal = TabController(length: 3, vsync: this);
+    _tabControllerInternal = TabController(length: 4, vsync: this);
     _loadUserData();
   }
 
@@ -269,6 +271,7 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
           tabs: const [
             Tab(icon: Icon(Icons.list), text: 'Проекты'),
             Tab(icon: Icon(Icons.bar_chart), text: 'Статистика'),
+            Tab(icon: Icon(Icons.analytics), text: 'Аналитика'), // ← НОВАЯ ВКЛАДКА
             Tab(icon: Icon(Icons.calendar_month), text: 'Календарь'),
           ],
         ),
@@ -307,29 +310,40 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
             child: RefreshIndicator(
               key: _refreshIndicatorKey,
               onRefresh: _refreshData,
+              // ЗАМЕНИТЬ весь TabBarView на этот исправленный код:
               child: TabBarView(
-                controller: _tabControllerInternal, // ← ИСПРАВИТЬ НА _tabControllerInternal
+                controller: _tabControllerInternal,
                 children: [
+                  // Вкладка 0: Проекты
                   currentUser != null
                       ? ProjectListScreen(
-                    currentUser: currentUser,
-                    onUserChanged: (user) {
-                      setState(() => currentUser = user);
-                      _saveCurrentUser();
-                    },
-                    onAddProject: _addProject,
-                    onDeleteProject: _deleteProject,
-                    onAddProgressHistory: _addProgressHistory,
-                  )
+                          currentUser: currentUser,
+                          onUserChanged: (user) {
+                            setState(() => currentUser = user);
+                            _saveCurrentUser();
+                          },
+                          onAddProject: _addProject,
+                          onDeleteProject: _deleteProject,
+                          onAddProgressHistory: _addProgressHistory,
+                        )
                       : const Center(child: CircularProgressIndicator()),
+                  
+                  // Вкладка 1: Статистика  
                   currentUser != null
                       ? StatisticsWidgets.buildStatisticsTab(context, currentUser)
                       : const Center(child: CircularProgressIndicator()),
+                  
+                  // Вкладка 2: Аналитика (НОВАЯ)
+                  currentUser != null
+                      ? TaskHeatmapWidget(currentUser: currentUser)
+                      : const Center(child: CircularProgressIndicator()),
+                  
+                  // Вкладка 3: Календарь (была вкладка 2)
                   currentUser != null
                       ? CalendarScreen(
-                    currentUser: currentUser,
-                    onItemCompleted: _handleItemCompletion,
-                  )
+                          currentUser: currentUser,
+                          onItemCompleted: _handleItemCompletion,
+                        )
                       : const Center(child: CircularProgressIndicator()),
                 ],
               ),
