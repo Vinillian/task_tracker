@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io'; // ← ДОБАВИТЬ ДЛЯ File
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
@@ -11,6 +11,7 @@ import '../models/task.dart';
 import '../models/progress_history.dart';
 import '../models/step.dart';
 import '../models/stage.dart';
+import '../models/recurrence_completion.dart'; // ДОБАВЬТЕ ЭТУ СТРОКУ
 
 class LocalRepository {
   static const String _userBoxName = 'userData';
@@ -72,11 +73,14 @@ class LocalRepository {
     if (!Hive.isAdapterRegistered(3)) {
       Hive.registerAdapter(StepAdapter());
     }
-    if (!Hive.isAdapterRegistered(6)) {
+    if (!Hive.isAdapterRegistered(8)) { // Измените с 7 на 8
       Hive.registerAdapter(StageAdapter());
     }
     if (!Hive.isAdapterRegistered(4)) {
       Hive.registerAdapter(ProgressHistoryAdapter());
+    }
+    if (!Hive.isAdapterRegistered(9)) { // Измените с 8 на 9
+      Hive.registerAdapter(RecurrenceCompletionAdapter());
     }
     print('✅ Адаптеры зарегистрированы');
   }

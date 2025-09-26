@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../models/project.dart';
 import '../models/task.dart';
 import '../models/stage.dart';
-import '../models/task_type.dart';
 import '../services/firestore_service.dart';
 import '../services/task_service.dart';
 import '../widgets/dialogs.dart';

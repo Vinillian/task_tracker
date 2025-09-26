@@ -6,25 +6,23 @@ import '../models/stage.dart';
 import '../models/step.dart' as custom_step;
 import '../models/project.dart';
 import '../services/recurrence_service.dart';
+import '../services/recurrence_completion_service.dart';
 import '../widgets/detailed_completion_dialog.dart';
-import 'task_tracker_screen.dart';
 
 class PlanningCalendarScreen extends StatelessWidget {
   final AppUser? currentUser;
-  final Function(Map<String, dynamic>) onItemCompleted; // ← ДОБАВИТЬ
+  final Function(Map<String, dynamic>) onItemCompleted;
 
   const PlanningCalendarScreen({
     super.key,
     required this.currentUser,
-    required this.onItemCompleted, // ← ДОБАВИТЬ
+    required this.onItemCompleted,
   });
 
   @override
   Widget build(BuildContext context) {
-    // 1. Собираем все запланированные элементы
     final plannedItems = <_PlannedItem>[];
 
-    // Сначала объявляем вспомогательные методы
     void _addTaskOccurrences(Project project, Task task, DateTime startDate) {
       final occurrences = task.recurrence != null
           ? RecurrenceService.generateOccurrences(
@@ -41,7 +39,8 @@ class PlanningCalendarScreen extends StatelessWidget {
           date: date,
           projectName: project.name,
           isRecurring: task.recurrence != null,
-          onTap: () => _showCompletionDialog(context, task, project, null, null, onItemCompleted),
+          item: task,
+          onTap: () => _showCompletionDialog(context, task, project, null, null),
         ));
       }
     }
@@ -63,7 +62,8 @@ class PlanningCalendarScreen extends StatelessWidget {
           projectName: project.name,
           taskName: task.name,
           isRecurring: stage.recurrence != null,
-          onTap: () => _showCompletionDialog(context, stage, project, task, null, onItemCompleted),
+          item: stage,
+          onTap: () => _showCompletionDialog(context, stage, project, task, null),
         ));
       }
     }
@@ -86,19 +86,17 @@ class PlanningCalendarScreen extends StatelessWidget {
           taskName: task.name,
           stageName: stage.name,
           isRecurring: step.recurrence != null,
-          onTap: () => _showCompletionDialog(context, step, project, task, stage, onItemCompleted),
+          item: step,
+          onTap: () => _showCompletionDialog(context, step, project, task, stage),
         ));
       }
     }
 
-    // Затем объявляем основной метод, который использует вспомогательные
     void addTaskItems(Project project, Task task) {
-      // Добавляем основную задачу, если у нее есть plannedDate
       if (task.plannedDate != null) {
         _addTaskOccurrences(project, task, task.plannedDate!);
       }
 
-      // Добавляем этапы и шаги
       for (final stage in task.stages) {
         if (stage.plannedDate != null) {
           _addStageOccurrences(project, task, stage, stage.plannedDate!);
@@ -120,17 +118,14 @@ class PlanningCalendarScreen extends StatelessWidget {
       }
     }
 
-    // 2. Сортируем по дате
     plannedItems.sort((a, b) => a.date.compareTo(b.date));
 
-    // 3. Группируем по датам
     final groupedItems = <DateTime, List<_PlannedItem>>{};
     for (final item in plannedItems) {
       final date = DateTime(item.date.year, item.date.month, item.date.day);
       groupedItems.putIfAbsent(date, () => []).add(item);
     }
 
-    // 4. Сортируем даты
     final sortedDates = groupedItems.keys.toList()..sort();
 
     return Scaffold(
@@ -139,8 +134,10 @@ class PlanningCalendarScreen extends StatelessWidget {
       ),
       body: groupedItems.isEmpty
           ? const Center(
-        child: Text('Нет запланированных задач.\nДобавьте дату выполнения в задачу, этап или шаг.',
-            textAlign: TextAlign.center),
+        child: Text(
+          'Нет запланированных задач.\nДобавьте дату выполнения в задачу, этап или шаг.',
+          textAlign: TextAlign.center,
+        ),
       )
           : ListView.builder(
         itemCount: sortedDates.length,
@@ -156,7 +153,9 @@ class PlanningCalendarScreen extends StatelessWidget {
                 child: Text(
                   DateFormat('dd MMMM yyyy, EEEE').format(date),
                   style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold),
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               ...items.map((item) => _buildPlannedItem(context, item)).toList(),
@@ -168,13 +167,37 @@ class PlanningCalendarScreen extends StatelessWidget {
   }
 
   Widget _buildPlannedItem(BuildContext context, _PlannedItem item) {
+    bool isCompleted = false;
+
+    if (item.isRecurring && item.item is Task) {
+      isCompleted = RecurrenceCompletionService.isOccurrenceCompleted(
+        item.item as Task,
+        item.date,
+      );
+    } else {
+      if (item.item is Task) {
+        isCompleted = (item.item as Task).isCompleted;
+      } else if (item.item is Stage) {
+        isCompleted = (item.item as Stage).isCompleted;
+      } else if (item.item is custom_step.Step) {
+        isCompleted = (item.item as custom_step.Step).isCompleted;
+      }
+    }
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: ListTile(
         leading: _getIconForType(item.type),
         title: Row(
           children: [
-            Expanded(child: Text(item.name)),
+            Expanded(
+              child: Text(
+                item.name,
+                style: TextStyle(
+                  decoration: isCompleted ? TextDecoration.lineThrough : TextDecoration.none,
+                ),
+              ),
+            ),
             if (item.isRecurring)
               const Icon(Icons.repeat, size: 16, color: Colors.blue),
           ],
@@ -186,13 +209,20 @@ class PlanningCalendarScreen extends StatelessWidget {
             if (item.taskName != null) Text('Задача: ${item.taskName}'),
             if (item.stageName != null) Text('Этап: ${item.stageName}'),
             Text('На: ${DateFormat('HH:mm').format(item.date)}'),
-            if (item.isRecurring) const Text('Повторяющаяся', style: TextStyle(color: Colors.blue)),
+            if (item.isRecurring)
+              Text(
+                isCompleted ? '✅ Выполнено' : '⏳ Ожидает',
+                style: TextStyle(color: isCompleted ? Colors.green : Colors.orange),
+              ),
           ],
         ),
         trailing: IconButton(
-          icon: const Icon(Icons.check_circle_outline),
+          icon: Icon(
+            isCompleted ? Icons.check_circle : Icons.check_circle_outline,
+            color: isCompleted ? Colors.green : Colors.grey,
+          ),
           onPressed: item.onTap,
-          tooltip: 'Отметить выполнение',
+          tooltip: isCompleted ? 'Снять отметку' : 'Отметить выполнение',
         ),
         onTap: item.onTap,
       ),
@@ -212,9 +242,13 @@ class PlanningCalendarScreen extends StatelessWidget {
     }
   }
 
-
-  void _showCompletionDialog(BuildContext context, dynamic item,
-      [Project? project, Task? task, Stage? stage, Function? callback]) {
+  void _showCompletionDialog(
+      BuildContext context,
+      dynamic item, [
+        Project? project,
+        Task? task,
+        Stage? stage,
+      ]) {
     showDialog(
       context: context,
       builder: (context) => DetailedCompletionDialog(
@@ -225,17 +259,12 @@ class PlanningCalendarScreen extends StatelessWidget {
       ),
     ).then((result) {
       if (result != null) {
-        if (callback != null) {
-          callback(result);
-        } else {
-          print('Элемент выполнен: $result');
-        }
+        onItemCompleted(result);
       }
     });
   }
 }
 
-// Вспомогательный класс для хранения данных о запланированном элементе
 class _PlannedItem {
   final String type;
   final String name;
@@ -244,6 +273,7 @@ class _PlannedItem {
   final String? taskName;
   final String? stageName;
   final bool isRecurring;
+  final dynamic item;
   final VoidCallback onTap;
 
   _PlannedItem({
@@ -254,6 +284,7 @@ class _PlannedItem {
     this.taskName,
     this.stageName,
     this.isRecurring = false,
+    required this.item,
     required this.onTap,
   });
 }

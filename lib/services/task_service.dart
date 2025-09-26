@@ -1,6 +1,6 @@
 import '../models/task.dart';
-import '../models/stage.dart'; // ← НОВЫЙ импорт
-import '../models/step.dart';  // ← НОВЫЙ импорт
+import '../models/stage.dart';
+import '../models/step.dart' as custom_step;
 import '../models/task_type.dart';
 import '../models/recurrence.dart';
 
@@ -13,7 +13,8 @@ class TaskService {
     Recurrence? recurrence,
     DateTime? dueDate,
     String? description,
-    int colorValue = 0xFF2196F3, // Цвет по умолчанию
+    int colorValue = 0xFF2196F3,
+    bool isTracked = true,
   }) {
     return Task(
       name: name,
@@ -25,6 +26,9 @@ class TaskService {
       dueDate: dueDate,
       description: description,
       isCompleted: false,
+      plannedDate: null,
+      colorValue: colorValue,
+      isTracked: isTracked,
     );
   }
 
@@ -37,17 +41,21 @@ class TaskService {
       stageType: stageType,
       isCompleted: false,
       steps: [],
+      plannedDate: null,
+      recurrence: null,
     );
   }
 
   // Создание шага
-  static Step createStep(String name, int steps, {String stepType = 'stepByStep'}) {
-    return Step(
+  static custom_step.Step createStep(String name, int steps, {String stepType = 'stepByStep'}) {
+    return custom_step.Step(
       name: name,
       totalSteps: steps,
       completedSteps: 0,
       stepType: stepType,
       isCompleted: false,
+      plannedDate: null,
+      recurrence: null,
     );
   }
 
@@ -63,6 +71,9 @@ class TaskService {
       dueDate: task.dueDate,
       isCompleted: !task.isCompleted,
       description: task.description,
+      plannedDate: task.plannedDate,
+      colorValue: task.colorValue,
+      isTracked: task.isTracked,
     );
   }
 
@@ -75,17 +86,21 @@ class TaskService {
       stageType: stage.stageType,
       isCompleted: !stage.isCompleted,
       steps: stage.steps,
+      plannedDate: stage.plannedDate,
+      recurrence: stage.recurrence,
     );
   }
 
   // Переключение завершения шага
-  static Step toggleStepCompletion(Step step) {
-    return Step(
+  static custom_step.Step toggleStepCompletion(custom_step.Step step) {
+    return custom_step.Step(
       name: step.name,
       completedSteps: step.completedSteps,
       totalSteps: step.totalSteps,
       stepType: step.stepType,
       isCompleted: !step.isCompleted,
+      plannedDate: step.plannedDate,
+      recurrence: step.recurrence,
     );
   }
 
@@ -104,6 +119,9 @@ class TaskService {
       dueDate: task.dueDate,
       isCompleted: isCompleted,
       description: task.description,
+      plannedDate: task.plannedDate,
+      colorValue: task.colorValue,
+      isTracked: task.isTracked,
     );
   }
 
@@ -113,32 +131,42 @@ class TaskService {
       return toggleStageCompletion(stage);
     }
 
+    final newCompletedSteps = (stage.completedSteps + steps).clamp(0, stage.totalSteps);
+    final isCompleted = newCompletedSteps >= stage.totalSteps;
+
     return Stage(
       name: stage.name,
-      completedSteps: (stage.completedSteps + steps).clamp(0, stage.totalSteps),
+      completedSteps: newCompletedSteps,
       totalSteps: stage.totalSteps,
       stageType: stage.stageType,
-      isCompleted: stage.isCompleted,
+      isCompleted: isCompleted,
       steps: stage.steps,
+      plannedDate: stage.plannedDate,
+      recurrence: stage.recurrence,
     );
   }
 
   // Добавление прогресса к шагу
-  static Step addProgressToStep(Step step, int steps) {
+  static custom_step.Step addProgressToStep(custom_step.Step step, int steps) {
     if (step.stepType == 'singleStep') {
       return toggleStepCompletion(step);
     }
 
-    return Step(
+    final newCompletedSteps = (step.completedSteps + steps).clamp(0, step.totalSteps);
+    final isCompleted = newCompletedSteps >= step.totalSteps;
+
+    return custom_step.Step(
       name: step.name,
-      completedSteps: (step.completedSteps + steps).clamp(0, step.totalSteps),
+      completedSteps: newCompletedSteps,
       totalSteps: step.totalSteps,
       stepType: step.stepType,
-      isCompleted: step.isCompleted,
+      isCompleted: isCompleted,
+      plannedDate: step.plannedDate,
+      recurrence: step.recurrence,
     );
   }
 
-  // Обновление задачи с сохранением цвета
+  // Обновление задачи
   static Task updateTask(Task oldTask, String name, int steps, {int? colorValue}) {
     return Task(
       name: name,
@@ -150,7 +178,9 @@ class TaskService {
       dueDate: oldTask.dueDate,
       isCompleted: oldTask.isCompleted,
       description: oldTask.description,
-      colorValue: colorValue ?? oldTask.colorValue, // Сохраняем цвет
+      plannedDate: oldTask.plannedDate,
+      colorValue: colorValue ?? oldTask.colorValue,
+      isTracked: oldTask.isTracked,
     );
   }
 
@@ -163,17 +193,21 @@ class TaskService {
       stageType: oldStage.stageType,
       isCompleted: oldStage.isCompleted,
       steps: oldStage.steps,
+      plannedDate: oldStage.plannedDate,
+      recurrence: oldStage.recurrence,
     );
   }
 
   // Обновление шага
-  static Step updateStep(Step oldStep, String name, int steps) {
-    return Step(
+  static custom_step.Step updateStep(custom_step.Step oldStep, String name, int steps) {
+    return custom_step.Step(
       name: name,
       completedSteps: oldStep.completedSteps.clamp(0, steps),
       totalSteps: steps,
       stepType: oldStep.stepType,
       isCompleted: oldStep.isCompleted,
+      plannedDate: oldStep.plannedDate,
+      recurrence: oldStep.recurrence,
     );
   }
 }

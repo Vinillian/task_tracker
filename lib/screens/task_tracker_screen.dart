@@ -19,6 +19,7 @@ import '../widgets/task_heatmap_widget.dart';
 import '../services/recurrence_service.dart'; // ← ДОБАВИТЬ
 import '../models/recurrence.dart'; // ← ДОБАВИТЬ
 
+
 class TaskTrackerScreen extends StatefulWidget {
   const TaskTrackerScreen({super.key});
 
@@ -42,7 +43,9 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
   void initState() {
     super.initState();
     _tabControllerInternal = TabController(length: 4, vsync: this);
-    _initializeData(); // Используем объединенный метод
+    _initializeData().then((_) {
+      _fixMissingPlannedDates(); // ← ДОБАВЬТЕ ЭТУ СТРОЧКУ
+    });
   }
 
   Future<void> _initializeData() async {
@@ -187,18 +190,62 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
   }
 
   // Метод для обработки завершения задач из экрана планирования
-  void _handleItemCompletionFromPlanning(Map<String, dynamic> completionResult) {
-    _handleItemCompletion(completionResult);
+  // В lib/screens/task_tracker_screen.dart в методе _handleItemCompletion
+  void _handleItemCompletion(Map<String, dynamic> completionResult) {
+    if (completionResult['item'] == null || currentUser == null) return;
+
+    final completedItem = completionResult['item'];
+    final project = completionResult['project'];
+    final task = completionResult['task'];
+    final stage = completionResult['stage'];
+
+    print('🎯 Обработка выполнения элемента:');
+    print('   📝 Элемент: ${completedItem.name}');
+    print('   🏗️ Тип: ${completedItem.runtimeType}');
+    print('   📂 Проект: ${project?.name}');
+    print('   ✅ Задача: ${task?.name}');
+    print('   📋 Этап: ${stage?.name}');
+
+    if (completedItem is Task) {
+      print('   🔄 Тип задачи: ${completedItem.taskType}');
+      print('   📊 Прогресс до: ${completedItem.completedSteps}/${completedItem.totalSteps}');
+      print('   ✅ Выполнена до: ${completedItem.isCompleted}');
+    }
+
+    // Для recurring задач - не сбрасываем прогресс, просто отмечаем выполнение
+    final result = CompletionService.completeItemWithHistory(
+      item: completedItem,
+      stepsAdded: 1,
+      itemName: CompletionService.getItemName(completedItem),
+      itemType: CompletionService.getItemType(completedItem),
+      currentHistory: currentUser!.progressHistory,
+    );
+
+    // Обновляем проекты
+    final updatedProjects = currentUser!.projects.map((p) => p.name == project?.name
+        ? _updateProjectWithCompletion(p, result['updatedItem'], task, stage)
+        : p
+    ).toList();
+
+    setState(() {
+      currentUser = AppUser(
+        username: currentUser!.username,
+        email: currentUser!.email,
+        projects: updatedProjects,
+        progressHistory: result['updatedHistory'],
+      );
+    });
+
+    _saveCurrentUser();
 
     // Показываем уведомление
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('✅ Задача выполнена!'),
+        content: Text('✅ ${CompletionService.getItemName(completedItem)} выполнено!'),
         duration: const Duration(seconds: 2),
       ),
     );
   }
-
   // Метод для сохранения текущего пользователя в Firestore
   void _saveCurrentUser() {
     if (currentUser == null) return;
@@ -333,6 +380,19 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     }
   }
 
+  // Метод для обработки завершения задач из экрана планирования
+  void _handleItemCompletionFromPlanning(Map<String, dynamic> completionResult) {
+    _handleItemCompletion(completionResult);
+
+    // Показываем уведомление
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('✅ Задача выполнена!'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
@@ -437,49 +497,6 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     super.dispose();
   }
 
-  void _handleItemCompletion(Map<String, dynamic> completionResult) {
-    if (completionResult['item'] == null || currentUser == null) return;
-
-    final completedItem = completionResult['item'];
-    final project = completionResult['project'];
-    final task = completionResult['task'];
-    final stage = completionResult['stage'];
-
-    // Используем новый метод с автоматическим переносом
-    final result = CompletionService.completeItemWithAutoMove(
-      item: completedItem,
-      stepsAdded: 1,
-      itemName: CompletionService.getItemName(completedItem),
-      itemType: CompletionService.getItemType(completedItem),
-      currentHistory: currentUser!.progressHistory,
-    );
-
-    // Обновляем проекты
-    final updatedProjects = currentUser!.projects.map((p) => p.name == project?.name
-        ? _updateProjectWithCompletion(p, result['updatedItem'], task, stage)
-        : p
-    ).toList();
-
-    setState(() {
-      currentUser = AppUser(
-        username: currentUser!.username,
-        email: currentUser!.email,
-        projects: updatedProjects,
-        progressHistory: result['updatedHistory'],
-      );
-    });
-
-    _saveCurrentUser();
-
-    // Показываем уведомление
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('✅ ${CompletionService.getItemName(completedItem)} выполнено!'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
   Project _updateProjectWithCompletion(Project project, dynamic completedItem, Task? parentTask, Stage? parentStage) {
     final updatedTasks = project.tasks.map((t) {
       // Если это задача верхнего уровня
@@ -538,4 +555,108 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     );
   }
 
+  // В _TaskTrackerScreenState
+  void _resetDailyRecurringTasks() {
+    if (currentUser == null) return;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final lastReset = _getLastResetDate();
+
+    // Сбрасываем статус только если сегодня новый день
+    if (lastReset == null || lastReset.isBefore(today)) {
+      print('🔄 Сброс статуса daily recurring задач на новый день');
+
+      final updatedProjects = currentUser!.projects.map((project) {
+        final updatedTasks = project.tasks.map((task) {
+          // Сбрасываем только daily recurring задачи
+          if (task.recurrence?.type == RecurrenceType.daily && task.isCompleted) {
+            return Task(
+              name: task.name,
+              completedSteps: 0,
+              totalSteps: task.totalSteps,
+              stages: task.stages,
+              taskType: task.taskType,
+              recurrence: task.recurrence,
+              dueDate: task.dueDate,
+              isCompleted: false, // СБРАСЫВАЕМ статус выполнения
+              description: task.description,
+              plannedDate: task.plannedDate,
+              colorValue: task.colorValue,
+              isTracked: task.isTracked,
+            );
+          }
+          return task;
+        }).toList();
+
+        return Project(name: project.name, tasks: updatedTasks);
+      }).toList();
+
+      setState(() {
+        currentUser = AppUser(
+          username: currentUser!.username,
+          email: currentUser!.email,
+          projects: updatedProjects,
+          progressHistory: currentUser!.progressHistory,
+        );
+      });
+
+      _saveLastResetDate(today);
+      _saveCurrentUser();
+    }
+  }
+
+  DateTime? _getLastResetDate() {
+    // Реализуйте хранение даты последнего сброса (например, в SharedPreferences)
+    return null;
+  }
+
+  void _saveLastResetDate(DateTime date) {
+    // Реализуйте сохранение даты последнего сброса
+  }
+
+  // В _TaskTrackerScreenState добавьте метод:
+  void _fixMissingPlannedDates() {
+    if (currentUser == null) return;
+
+    bool needsFix = false;
+    final updatedProjects = currentUser!.projects.map((project) {
+      final updatedTasks = project.tasks.map((task) {
+        // Если задача recurring но plannedDate = null - восстанавливаем
+        if (task.recurrence != null && task.plannedDate == null) {
+          needsFix = true;
+          return Task(
+            name: task.name,
+            completedSteps: task.completedSteps,
+            totalSteps: task.totalSteps,
+            stages: task.stages,
+            taskType: task.taskType,
+            recurrence: task.recurrence,
+            dueDate: task.dueDate,
+            isCompleted: task.isCompleted,
+            description: task.description,
+            plannedDate: DateTime.now(), // Устанавливаем сегодняшнюю дату
+            colorValue: task.colorValue,
+            isTracked: task.isTracked,
+          );
+        }
+        return task;
+      }).toList();
+
+      return Project(name: project.name, tasks: updatedTasks);
+    }).toList();
+
+    if (needsFix) {
+      setState(() {
+        currentUser = AppUser(
+          username: currentUser!.username,
+          email: currentUser!.email,
+          projects: updatedProjects,
+          progressHistory: currentUser!.progressHistory,
+        );
+      });
+      _saveCurrentUser();
+      print('✅ Восстановлены отсутствующие plannedDate');
+    }
+  }
 }

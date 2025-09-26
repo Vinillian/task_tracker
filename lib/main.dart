@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:hive_flutter/hive_flutter.dart'; // 👈 добавил
+import 'package:hive_flutter/hive_flutter.dart';
 import 'firebase_options.dart';
 import 'screens/task_tracker_screen.dart';
 import 'services/firestore_service.dart';
 import 'services/auth_service.dart';
 import 'screens/auth_screen.dart';
 import 'repositories/local_repository.dart';
-import 'models/recurrence.dart'; // 👈 важно подключить модель
+import 'models/recurrence.dart';
+import 'models/recurrence_completion.dart';
 
 // Глобальные ключи для доступа к сервисам
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
@@ -21,9 +22,10 @@ void main() async {
   // 🔹 Инициализируем Hive перед LocalRepository
   await Hive.initFlutter();
 
-  // 🔹 Регистрируем адаптеры для кастомных моделей
+  // 🔹 Регистрируем адаптеры для кастомных моделей (ТОЛЬКО ОДИН РАЗ!)
   Hive.registerAdapter(RecurrenceAdapter());
   Hive.registerAdapter(RecurrenceTypeAdapter());
+  Hive.registerAdapter(RecurrenceCompletionAdapter()); // УБРАТЬ ДУБЛИРОВАНИЕ
 
   // 🔹 Локальное хранилище
   final localRepository = LocalRepository();

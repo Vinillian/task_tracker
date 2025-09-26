@@ -7,14 +7,12 @@ import '../models/stage.dart';
 import '../models/step.dart' as custom_step;
 import '../widgets/detailed_completion_dialog.dart';
 import '../services/recurrence_service.dart';
+import '../services/recurrence_completion_service.dart';
+
 
 class CalendarScreen extends StatefulWidget {
   final AppUser? currentUser;
   final Function(Map<String, dynamic>) onItemCompleted;
-  final isToday = _selectedDay != null &&
-      isSameDay(_selectedDay!, DateTime.now()) &&
-      item['occurrenceDate'] != null &&
-      isSameDay(item['occurrenceDate'], DateTime.now());
 
   const CalendarScreen({
     super.key,
@@ -42,7 +40,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     for (final project in widget.currentUser!.projects) {
       for (final task in project.tasks) {
-        // Для recurring задач показываем ТОЛЬКО сгенерированные occurrences
+        // Для recurring задач показываем ВСЕ сгенерированные occurrences
         if (task.recurrence != null && task.plannedDate != null) {
           final occurrences = RecurrenceService.generateOccurrences(
             recurrence: task.recurrence!,
@@ -54,10 +52,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
             final date = DateTime(occurrence.year, occurrence.month, occurrence.day);
             final occurrenceDay = DateTime(occurrence.year, occurrence.month, occurrence.day);
 
-            // Для recurring задач: показываем ВСЕ будущие даты, даже если задача выполнена
-            // И текущий день, если он совпадает с occurrence
+            // Показываем ВСЕ будущие даты и текущий день
             if (occurrenceDay.isAfter(today.subtract(const Duration(days: 1))) ||
                 isSameDay(occurrenceDay, today)) {
+
+              // Для recurring задач статус выполнения определяется для каждого occurrence отдельно
+              final bool isCompleted = _isOccurrenceCompleted(task, occurrence);
 
               plannedItems.putIfAbsent(date, () => []).add({
                 'type': 'task',
@@ -66,32 +66,37 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 'name': task.name,
                 'isRecurring': true,
                 'occurrenceDate': occurrence,
-                'isCompleted': task.isCompleted, // Добавляем статус выполнения
-                'originalPlannedDate': task.plannedDate, // Сохраняем оригинальную дату
+                'isCompleted': isCompleted,
+                'originalPlannedDate': task.plannedDate,
               });
             }
           }
         }
-        // Для НЕ-recurring задач показываем оригинальную задачу только если она не выполнена
+        // Для НЕ-recurring задач показываем только если не выполнена
         else if (task.plannedDate != null && task.recurrence == null && !task.isCompleted) {
           final date = DateTime(
             task.plannedDate!.year,
             task.plannedDate!.month,
             task.plannedDate!.day,
           );
-          plannedItems.putIfAbsent(date, () => []).add({
-            'type': 'task',
-            'item': task,
-            'project': project,
-            'name': task.name,
-            'isRecurring': false,
-            'isCompleted': task.isCompleted,
-          });
+
+          // Non-recurring задачи показываем только если дата сегодня или в будущем
+          final isFutureOrToday = !date.isBefore(today);
+          if (isFutureOrToday) {
+            plannedItems.putIfAbsent(date, () => []).add({
+              'type': 'task',
+              'item': task,
+              'project': project,
+              'name': task.name,
+              'isRecurring': false,
+              'isCompleted': task.isCompleted,
+            });
+          }
         }
 
-        // Обработка этапов задачи
+        // Обработка этапов задачи (АНАЛОГИЧНАЯ ЛОГИКА)
         for (final stage in task.stages) {
-          // Для recurring этапов показываем ТОЛЬКО сгенерированные occurrences
+          // Для recurring этапов показываем ВСЕ сгенерированные occurrences
           if (stage.recurrence != null && stage.plannedDate != null) {
             final occurrences = RecurrenceService.generateOccurrences(
               recurrence: stage.recurrence!,
@@ -106,6 +111,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
               if (occurrenceDay.isAfter(today.subtract(const Duration(days: 1))) ||
                   isSameDay(occurrenceDay, today)) {
 
+                final bool isCompleted = _isOccurrenceCompletedForStage(stage, occurrence);
+
                 plannedItems.putIfAbsent(date, () => []).add({
                   'type': 'stage',
                   'item': stage,
@@ -114,33 +121,37 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   'name': stage.name,
                   'isRecurring': true,
                   'occurrenceDate': occurrence,
-                  'isCompleted': stage.isCompleted,
+                  'isCompleted': isCompleted,
                   'originalPlannedDate': stage.plannedDate,
                 });
               }
             }
           }
-          // Для НЕ-recurring этапов показываем оригинальный этап только если не выполнен
+          // Для НЕ-recurring этапов показываем только если не выполнен
           else if (stage.plannedDate != null && stage.recurrence == null && !stage.isCompleted) {
             final date = DateTime(
               stage.plannedDate!.year,
               stage.plannedDate!.month,
               stage.plannedDate!.day,
             );
-            plannedItems.putIfAbsent(date, () => []).add({
-              'type': 'stage',
-              'item': stage,
-              'project': project,
-              'task': task,
-              'name': stage.name,
-              'isRecurring': false,
-              'isCompleted': stage.isCompleted,
-            });
+
+            final isFutureOrToday = !date.isBefore(today);
+            if (isFutureOrToday) {
+              plannedItems.putIfAbsent(date, () => []).add({
+                'type': 'stage',
+                'item': stage,
+                'project': project,
+                'task': task,
+                'name': stage.name,
+                'isRecurring': false,
+                'isCompleted': stage.isCompleted,
+              });
+            }
           }
 
-          // Обработка шагов этапа
+          // Обработка шагов этапа (АНАЛОГИЧНАЯ ЛОГИКА)
           for (final step in stage.steps) {
-            // Для recurring шагов показываем ТОЛЬКО сгенерированные occurrences
+            // Для recurring шагов показываем ВСЕ сгенерированные occurrences
             if (step.recurrence != null && step.plannedDate != null) {
               final occurrences = RecurrenceService.generateOccurrences(
                 recurrence: step.recurrence!,
@@ -155,6 +166,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 if (occurrenceDay.isAfter(today.subtract(const Duration(days: 1))) ||
                     isSameDay(occurrenceDay, today)) {
 
+                  final bool isCompleted = _isOccurrenceCompletedForStep(step, occurrence);
+
                   plannedItems.putIfAbsent(date, () => []).add({
                     'type': 'step',
                     'item': step,
@@ -164,29 +177,33 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     'name': step.name,
                     'isRecurring': true,
                     'occurrenceDate': occurrence,
-                    'isCompleted': step.isCompleted,
+                    'isCompleted': isCompleted,
                     'originalPlannedDate': step.plannedDate,
                   });
                 }
               }
             }
-            // Для НЕ-recurring шагов показываем оригинальный шаг только если не выполнен
+            // Для НЕ-recurring шагов показываем только если не выполнен
             else if (step.plannedDate != null && step.recurrence == null && !step.isCompleted) {
               final date = DateTime(
                 step.plannedDate!.year,
                 step.plannedDate!.month,
                 step.plannedDate!.day,
               );
-              plannedItems.putIfAbsent(date, () => []).add({
-                'type': 'step',
-                'item': step,
-                'project': project,
-                'task': task,
-                'stage': stage,
-                'name': step.name,
-                'isRecurring': false,
-                'isCompleted': step.isCompleted,
-              });
+
+              final isFutureOrToday = !date.isBefore(today);
+              if (isFutureOrToday) {
+                plannedItems.putIfAbsent(date, () => []).add({
+                  'type': 'step',
+                  'item': step,
+                  'project': project,
+                  'task': task,
+                  'stage': stage,
+                  'name': step.name,
+                  'isRecurring': false,
+                  'isCompleted': step.isCompleted,
+                });
+              }
             }
           }
         }
@@ -194,13 +211,70 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
 
     print('📅 Найдено запланированных дней: ${plannedItems.length}');
-    plannedItems.forEach((date, items) {
-      print('   $date: ${items.length} задач');
-      for (final item in items) {
-        print('     - ${item['name']} (${item['type']}) - recurring: ${item['isRecurring']} - completed: ${item['isCompleted']}');
-      }
-    });
     return plannedItems;
+  }
+
+  // Новые методы для проверки выполнения конкретных occurrences
+  bool _isOccurrenceCompleted(Task task, DateTime occurrenceDate) {
+    // Для recurring задач используем новую систему отслеживания
+    if (task.recurrence != null) {
+      return RecurrenceCompletionService.isOccurrenceCompleted(task, occurrenceDate);
+    }
+
+    // Для обычных задач используем старую логику
+    final today = DateTime.now();
+    final occurrenceDay = DateTime(occurrenceDate.year, occurrenceDate.month, occurrenceDate.day);
+    final todayNormalized = DateTime(today.year, today.month, today.day);
+
+    if (isSameDay(occurrenceDay, todayNormalized)) {
+      return task.isCompleted;
+    }
+
+    return false;
+  }
+
+  // Обновите метод обработки выполнения
+  void _handleItemCompletion(Map<String, dynamic> completionResult) {
+    final item = completionResult['item'];
+    final occurrenceDate = completionResult['occurrenceDate'] as DateTime?;
+    final isRecurring = completionResult['isRecurring'] == true;
+
+    if (isRecurring && occurrenceDate != null && item is Task) {
+      // Для recurring задач используем новую систему
+      if (RecurrenceCompletionService.isOccurrenceCompleted(item, occurrenceDate)) {
+        RecurrenceCompletionService.unmarkOccurrenceCompleted(item, occurrenceDate);
+      } else {
+        RecurrenceCompletionService.markOccurrenceCompleted(item, occurrenceDate);
+      }
+
+      // Обновляем UI
+      setState(() {});
+    }
+    // Для обычных задач обработка остается в onItemCompleted
+  }
+
+  bool _isOccurrenceCompletedForStage(Stage stage, DateTime occurrenceDate) {
+    final today = DateTime.now();
+    final occurrenceDay = DateTime(occurrenceDate.year, occurrenceDate.month, occurrenceDate.day);
+    final todayNormalized = DateTime(today.year, today.month, today.day);
+
+    if (isSameDay(occurrenceDay, todayNormalized)) {
+      return stage.isCompleted;
+    }
+
+    return false;
+  }
+
+  bool _isOccurrenceCompletedForStep(custom_step.Step step, DateTime occurrenceDate) {
+    final today = DateTime.now();
+    final occurrenceDay = DateTime(occurrenceDate.year, occurrenceDate.month, occurrenceDate.day);
+    final todayNormalized = DateTime(today.year, today.month, today.day);
+
+    if (isSameDay(occurrenceDay, todayNormalized)) {
+      return step.isCompleted;
+    }
+
+    return false;
   }
 
   @override
@@ -223,14 +297,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
             calendarFormat: _calendarFormat,
             eventLoader: (day) => plannedItems[day] ?? [],
             selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-
             headerStyle: HeaderStyle(
               formatButtonVisible: false,
               titleCentered: true,
               leftChevronIcon: Icon(Icons.chevron_left),
               rightChevronIcon: Icon(Icons.chevron_right),
             ),
-
             onDaySelected: (selectedDay, focusedDay) {
               print('📅 Выбран день: $selectedDay');
               print('🔍 Ищем задачи для: ${DateTime(selectedDay.year, selectedDay.month, selectedDay.day)}');
@@ -241,7 +313,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 _focusedDay = focusedDay;
               });
             },
-
             onDayLongPressed: (selectedDay, focusedDay) {
               final items = plannedItems[selectedDay] ?? [];
               if (items.isNotEmpty) {
@@ -255,8 +326,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         shrinkWrap: true,
                         children: items.map((item) => ListTile(
                           leading: Icon(
-                            item['type'] == 'task' ? Icons.task :
-                            item['type'] == 'stage' ? Icons.album : Icons.star,
+                            item['type'] == 'task'
+                                ? Icons.task
+                                : item['type'] == 'stage'
+                                ? Icons.album
+                                : Icons.star,
                             size: 20,
                             color: Colors.blue,
                           ),
@@ -275,17 +349,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 );
               }
             },
-
             onFormatChanged: (format) {
               setState(() {
                 _calendarFormat = format;
               });
             },
-
             onPageChanged: (focusedDay) {
               _focusedDay = focusedDay;
             },
-
             calendarBuilders: CalendarBuilders(
               todayBuilder: (context, date, events) {
                 return Container(
@@ -303,7 +374,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   ),
                 );
               },
-
               markerBuilder: (context, day, events) {
                 if (events.isNotEmpty) {
                   final typedEvents = events.cast<Map<String, dynamic>>();
@@ -359,7 +429,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
               },
             ),
           ),
-
           Expanded(
             child: _selectedDay == null
                 ? const Center(child: Text('Выберите день для просмотра задач'))
@@ -379,18 +448,24 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       final item = selectedItems[index];
                       final isCompleted = item['isCompleted'] == true;
                       final isRecurring = item['isRecurring'] == true;
-                      final isToday = _selectedDay != null && isSameDay(_selectedDay!, DateTime.now());
+                      final occurrenceDate = item['occurrenceDate'];
+                      final isToday = _selectedDay != null &&
+                          occurrenceDate != null &&
+                          isSameDay(_selectedDay!, occurrenceDate) &&
+                          isSameDay(occurrenceDate, DateTime.now());
 
-                      print('📋 Отображаем задачу: ${item['name']}, completed: $isCompleted, recurring: $isRecurring');
+                      print('📋 Задача: ${item['name']}, recurring: $isRecurring, completed: $isCompleted, today: $isToday');
 
-                      // Для выполненных non-recurring задач не показываем кнопку выполнения
-                      final showCompletionButton = !isCompleted || (isRecurring && isToday);
+                      // Логика доступности выполнения:
+                      // - Для recurring задач: можно выполнять только сегодняшний occurrence
+                      // - Для non-recurring задач: можно выполнять если не выполнена
+                      final bool canComplete = isRecurring ? isToday : !isCompleted;
 
                       return ListTile(
                         leading: Icon(
                           item['type'] == 'task' ? Icons.task :
                           item['type'] == 'stage' ? Icons.album : Icons.star,
-                          color: isCompleted ? Colors.grey : Colors.blue,
+                          color: canComplete ? Colors.blue : Colors.grey,
                         ),
                         title: Text(
                           item['name'],
@@ -406,30 +481,25 @@ class _CalendarScreenState extends State<CalendarScreen> {
                             Text('Тип: ${item['type']}'),
                             if (isRecurring)
                               Text('🔄 Повторяющаяся', style: TextStyle(color: Colors.green, fontSize: 12)),
-                            if (isCompleted && !isRecurring)
-                              Text('✅ Выполнено', style: TextStyle(color: Colors.grey, fontSize: 12)),
                             if (isRecurring && isToday && isCompleted)
                               Text('✅ Выполнено сегодня', style: TextStyle(color: Colors.green, fontSize: 12)),
                             if (isRecurring && isToday && !isCompleted)
-                              Text('⏳ Ожидает выполнения', style: TextStyle(color: Colors.orange, fontSize: 12)),
+                              Text('⏳ Ожидает выполнения сегодня', style: TextStyle(color: Colors.orange, fontSize: 12)),
                             if (isRecurring && !isToday)
-                              Text('📅 Запланировано', style: TextStyle(color: Colors.blue, fontSize: 12)),
+                              Text('📅 Запланировано на ${DateFormat('dd.MM.yyyy').format(item['occurrenceDate'])}',
+                                  style: TextStyle(color: Colors.blue, fontSize: 12)),
+                            if (!isRecurring && isCompleted)
+                              Text('✅ Выполнено', style: TextStyle(color: Colors.grey, fontSize: 12)),
                           ],
                         ),
                         trailing: IconButton(
                           icon: Icon(
                             Icons.check,
-                            color: isRecurring
-                                ? (isToday ? Colors.green : Colors.grey)
-                                : (isCompleted ? Colors.grey : Colors.green),
+                            color: canComplete ? Colors.green : Colors.grey,
                           ),
-                          onPressed: isRecurring
-                              ? (isToday ? () => _showCompletionDialog(context, item) : null)
-                              : (isCompleted ? null : () => _showCompletionDialog(context, item)),
+                          onPressed: canComplete ? () => _showCompletionDialog(context, item) : null,
                         ),
-                        onTap: isRecurring
-                            ? (isToday ? () => _showCompletionDialog(context, item) : null)
-                            : (isCompleted ? null : () => _showCompletionDialog(context, item)),
+                        onTap: canComplete ? () => _showCompletionDialog(context, item) : null,
                       );
                     },
                   ),
@@ -442,6 +512,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
+
   void _showCompletionDialog(BuildContext context, Map<String, dynamic> itemData) {
     showDialog(
       context: context,
@@ -451,19 +522,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
           project: itemData['project'],
           task: itemData['task'],
           stage: itemData['stage'],
+          occurrenceDate: itemData['occurrenceDate'], // Добавьте это
         );
       },
     ).then((result) {
       if (result != null) {
-        widget.onItemCompleted(result);
+        _handleItemCompletion(result); // Сначала обрабатываем локально
+        widget.onItemCompleted(result); // Затем передаем дальше
       }
     });
   }
-  bool _isOccurrenceToday(DateTime selectedDay, DateTime? occurrenceDate) {
-    if (occurrenceDate == null) return false;
-
-    final today = DateTime.now();
-    return isSameDay(selectedDay, today) && isSameDay(occurrenceDate, today);
-  }
-
 }

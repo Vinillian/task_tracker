@@ -32,8 +32,8 @@ class Step {
     required this.totalSteps,
     this.stepType = 'stepByStep',
     this.isCompleted = false,
-    this.plannedDate,
-    this.recurrence,
+    this.plannedDate, // ← Должен быть здесь
+    this.recurrence, // ← И здесь
   });
 
   Map<String, dynamic> toFirestore() {
@@ -43,7 +43,8 @@ class Step {
       'totalSteps': totalSteps,
       'stepType': stepType,
       'isCompleted': isCompleted,
-      'plannedDate': plannedDate?.toIso8601String(), // Добавлено
+      'plannedDate': plannedDate?.toIso8601String(),
+      'recurrence': recurrence?.toMap(), // ← ДОБАВИТЬ ЭТУ СТРОЧКУ
     };
   }
 

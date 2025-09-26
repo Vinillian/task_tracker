@@ -1,6 +1,5 @@
 import 'stage.dart';
 import 'package:hive/hive.dart';
-import 'task_type.dart';
 import 'recurrence.dart';
 import 'package:flutter/material.dart';
 part 'task.g.dart';
@@ -44,6 +43,7 @@ class Task {
   final bool isTracked;
 
 
+  // В конструкторе Task добавьте plannedDate:
   Task({
     required this.name,
     this.completedSteps = 0,
@@ -54,9 +54,9 @@ class Task {
     this.dueDate,
     this.isCompleted = false,
     this.description,
-    this.plannedDate,
-    this.colorValue, // ← Убрать значение по умолчанию
-    this.isTracked = true, // ← НОВОЕ ЗНАЧЕНИЕ ПО УМОЛЧАНИЮ
+    this.plannedDate, // ← Должен быть в конструкторе
+    this.colorValue,
+    this.isTracked = true,
   }) : stages = stages ?? [];
 
   // Обновить геттер для обработки null
@@ -73,9 +73,9 @@ class Task {
       'dueDate': dueDate?.toIso8601String(),
       'isCompleted': isCompleted,
       'description': description,
-      'plannedDate': plannedDate?.toIso8601String(),
+      'plannedDate': plannedDate?.toIso8601String(), // ← ВАЖНО: сохраняем
       'colorValue': colorValue ?? 0xFF2196F3,
-      'isTracked': isTracked, // ← ДОБАВИТЬ
+      'isTracked': isTracked,
     };
   }
 
@@ -98,9 +98,9 @@ class Task {
       description: data['description'],
       plannedDate: data['plannedDate'] != null
           ? DateTime.parse(data['plannedDate'])
-          : null,
+          : null, // ← ВАЖНО: сохраняем plannedDate
       colorValue: data['colorValue'] ?? 0xFF2196F3,
-      isTracked: data['isTracked'] ?? true, // ← ДОБАВИТЬ
+      isTracked: data['isTracked'] ?? true,
     );
   }
 }
