@@ -1,19 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/task.dart';
-import '../models/task_type.dart';
 import '../models/recurrence.dart';
-import 'dart:math';
 
-// Вспомогательный класс для хранения информации о цвете
-class _ColorOption {
-  final String name;
-  final int value;
-  final IconData icon;
-  final MaterialColor color;
-
-  _ColorOption(this.name, this.value, this.icon, this.color);
-}
 
 class TaskEditDialog extends StatefulWidget {
   final Task? initialTask;

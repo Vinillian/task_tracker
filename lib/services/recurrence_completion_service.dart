@@ -27,4 +27,9 @@ class RecurrenceCompletionService {
   static String _getTaskId(Task task) {
     return '${task.name}_${task.totalSteps}';
   }
+
+  static void reset() {
+    _completions.clear();
+  }
+
 }

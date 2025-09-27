@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/app_user.dart';
 import '../models/project.dart';
-import '../services/firestore_service.dart';
 import '../widgets/dialogs.dart';
 import 'project_detail_screen.dart';
+import '../services/recurrence_completion_service.dart';
 
 class ProjectListScreen extends StatelessWidget {
   final AppUser? currentUser;
@@ -31,13 +31,20 @@ class ProjectListScreen extends StatelessWidget {
   Widget _buildProjectProgress(Project project) {
     int completed = 0;
     int total = project.tasks.length;
+    final today = DateTime.now();
 
     for (var task in project.tasks) {
-      // Для пошаговых задач - считаем завершенными если все шаги выполнены
-      if (task.taskType == "stepByStep") {
+      // 🔹 Для recurring-задач смотрим сервис
+      if (task.recurrence != null) {
+        if (RecurrenceCompletionService.isOccurrenceCompleted(task, today)) {
+          completed++;
+        }
+      }
+      // 🔹 Для пошаговых задач - считаем завершенными если все шаги выполнены
+      else if (task.taskType == "stepByStep") {
         if (task.completedSteps >= task.totalSteps) completed++;
       }
-      // Для одношаговых задач - используем флаг isCompleted
+      // 🔹 Для одношаговых задач - используем флаг isCompleted
       else if (task.taskType == "singleStep") {
         if (task.isCompleted) completed++;
       }
@@ -51,7 +58,11 @@ class ProjectListScreen extends StatelessWidget {
         LinearProgressIndicator(
           value: progress,
           backgroundColor: Colors.grey.shade200,
-          color: progress > 0.7 ? Colors.green : progress > 0.3 ? Colors.orange : Colors.red,
+          color: progress > 0.7
+              ? Colors.green
+              : progress > 0.3
+              ? Colors.orange
+              : Colors.red,
           minHeight: 6,
           borderRadius: BorderRadius.circular(3),
         ),
@@ -67,6 +78,8 @@ class ProjectListScreen extends StatelessWidget {
       ],
     );
   }
+
+
 
   @override
   Widget build(BuildContext context) {

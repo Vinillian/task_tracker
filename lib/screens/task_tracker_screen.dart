@@ -8,7 +8,6 @@ import '../models/progress_history.dart';
 import '../widgets/statistics_widgets.dart';
 import 'project_list_screen.dart';
 import 'drawer_screen.dart';
-import 'planning_calendar_screen.dart';
 import '../repositories/local_repository.dart';
 import '../models/task.dart';
 import '../models/stage.dart';
@@ -16,8 +15,7 @@ import '../models/step.dart' as custom_step;
 import '../services/completion_service.dart';
 import 'calendar_screen.dart';
 import '../widgets/task_heatmap_widget.dart';
-import '../services/recurrence_service.dart'; // ← ДОБАВИТЬ
-import '../models/recurrence.dart'; // ← ДОБАВИТЬ
+import '../services/recurrence_completion_service.dart'; // ← ДОБАВЬТЕ ЭТУ СТРОЧКУ
 
 
 class TaskTrackerScreen extends StatefulWidget {
@@ -149,48 +147,28 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     }
   }
 
-  AppUser _autoMoveDailyTasks(AppUser user) {
-    final updatedProjects = user.projects.map((project) {
-      final updatedTasks = project.tasks.map((task) {
-        // Автоматический перенос daily задач, которые ПРОСРОЧЕНЫ и не выполнены
-        if (task.recurrence?.type == RecurrenceType.daily &&
-            task.plannedDate != null &&
-            RecurrenceService.shouldMoveToNextDay(task.plannedDate!, task.recurrence!) &&
-            !task.isCompleted) {
+  // В lib/screens/project_list_screen.dart
+  int _calculateRealCompletedTasks(Project project) {
+    int completed = 0;
+    final today = DateTime.now();
 
-          // Для recurring задач не меняем plannedDate, только если они просрочены
-          final nextDate = RecurrenceService.getNextOccurrenceForDailyTask(task.plannedDate!, task.recurrence!);
-          return Task(
-            name: task.name,
-            completedSteps: 0,
-            totalSteps: task.totalSteps,
-            stages: task.stages,
-            taskType: task.taskType,
-            recurrence: task.recurrence,
-            dueDate: task.dueDate,
-            isCompleted: false,
-            description: task.description,
-            plannedDate: nextDate, // ⚠️ Меняем дату только для просроченных
-            colorValue: task.colorValue,
-            isTracked: task.isTracked,
-          );
+    for (var task in project.tasks) {
+      if (task.recurrence != null) {
+        // Для recurring задач проверяем выполнение на сегодня
+        if (RecurrenceCompletionService.isOccurrenceCompleted(task, today)) {
+          completed++;
         }
-        return task;
-      }).toList();
+      } else if (task.taskType == "singleStep" && task.isCompleted) {
+        completed++;
+      } else if (task.taskType == "stepByStep" && task.completedSteps >= task.totalSteps) {
+        completed++;
+      }
+    }
 
-      return Project(name: project.name, tasks: updatedTasks);
-    }).toList();
-
-    return AppUser(
-      username: user.username,
-      email: user.email,
-      projects: updatedProjects,
-      progressHistory: user.progressHistory,
-    );
+    return completed;
   }
 
   // Метод для обработки завершения задач из экрана планирования
-  // В lib/screens/task_tracker_screen.dart в методе _handleItemCompletion
   void _handleItemCompletion(Map<String, dynamic> completionResult) {
     if (completionResult['item'] == null || currentUser == null) return;
 
@@ -198,21 +176,54 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     final project = completionResult['project'];
     final task = completionResult['task'];
     final stage = completionResult['stage'];
+    final isRecurring = completionResult['isRecurring'] == true;
+    final occurrenceDate = completionResult['occurrenceDate'];
 
-    print('🎯 Обработка выполнения элемента:');
-    print('   📝 Элемент: ${completedItem.name}');
-    print('   🏗️ Тип: ${completedItem.runtimeType}');
-    print('   📂 Проект: ${project?.name}');
-    print('   ✅ Задача: ${task?.name}');
-    print('   📋 Этап: ${stage?.name}');
+    print('🎯 Обработка выполнения: ${completedItem.name}, recurring: $isRecurring');
 
-    if (completedItem is Task) {
-      print('   🔄 Тип задачи: ${completedItem.taskType}');
-      print('   📊 Прогресс до: ${completedItem.completedSteps}/${completedItem.totalSteps}');
-      print('   ✅ Выполнена до: ${completedItem.isCompleted}');
+    // Для recurring задач - только история, без изменения оригинала
+    if (isRecurring && occurrenceDate != null) {
+      _handleRecurringItemCompletion(completedItem, project, task, stage);
+      return;
     }
 
-    // Для recurring задач - не сбрасываем прогресс, просто отмечаем выполнение
+    // Для обычных задач - полная обработка
+    _handleRegularItemCompletion(completedItem, project, task, stage);
+  }
+
+// НОВЫЙ МЕТОД: Обработка recurring задач
+  void _handleRecurringItemCompletion(dynamic completedItem, Project? project, Task? task, Stage? stage) {
+    print('🔄 Обработка RECURRING задачи: ${completedItem.name}');
+
+    // Создаем запись в истории прогресса
+    final progressHistory = ProgressHistory(
+      date: DateTime.now(),
+      itemName: completedItem.name,
+      stepsAdded: 1,
+      itemType: _getItemType(completedItem),
+    );
+
+    // Обновляем только историю, не меняем сами задачи
+    final updatedHistory = List<dynamic>.from(currentUser!.progressHistory)
+      ..add(progressHistory);
+
+    setState(() {
+      currentUser = AppUser(
+        username: currentUser!.username,
+        email: currentUser!.email,
+        projects: currentUser!.projects, // Не меняем проекты для recurring задач
+        progressHistory: updatedHistory,
+      );
+    });
+
+    _saveCurrentUser(); // ← СОХРАНЯЕМ И В HIVE И В FIRESTORE
+    print('✅ Recurring задача "${completedItem.name}" добавлена в историю');
+  }
+
+// НОВЫЙ МЕТОД: Обработка обычных задач
+  void _handleRegularItemCompletion(dynamic completedItem, Project? project, Task? task, Stage? stage) {
+    print('📝 Обработка ОБЫЧНОЙ задачи: ${completedItem.name}');
+
     final result = CompletionService.completeItemWithHistory(
       item: completedItem,
       stepsAdded: 1,
@@ -221,11 +232,15 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
       currentHistory: currentUser!.progressHistory,
     );
 
-    // Обновляем проекты
-    final updatedProjects = currentUser!.projects.map((p) => p.name == project?.name
-        ? _updateProjectWithCompletion(p, result['updatedItem'], task, stage)
-        : p
-    ).toList();
+    // Обновляем проекты с правильной логикой
+    final updatedProjects = _updateProjectsWithCompletion(
+        currentUser!.projects,
+        completedItem,
+        project,
+        task,
+        stage,
+        result['updatedItem']
+    );
 
     setState(() {
       currentUser = AppUser(
@@ -237,15 +252,20 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     });
 
     _saveCurrentUser();
-
-    // Показываем уведомление
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('✅ ${CompletionService.getItemName(completedItem)} выполнено!'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
+
+// Вспомогательный метод для определения типа элемента
+  String _getItemType(dynamic item) {
+    if (item is Task) return 'task';
+    if (item is Stage) return 'stage';
+    if (item is custom_step.Step) return 'step';
+    return 'unknown';
+  }
+
+
+
+
+
   // Метод для сохранения текущего пользователя в Firestore
   void _saveCurrentUser() {
     if (currentUser == null) return;
@@ -368,18 +388,6 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     _saveCurrentUser();
   }
 
-  void _onProjectUpdated(Project updatedProject) {
-    if (currentUser == null) return;
-
-    final index = currentUser!.projects.indexWhere((p) => p.name == updatedProject.name);
-    if (index != -1) {
-      setState(() {
-        currentUser!.projects[index] = updatedProject;
-      });
-      _saveCurrentUser();
-    }
-  }
-
   // Метод для обработки завершения задач из экрана планирования
   void _handleItemCompletionFromPlanning(Map<String, dynamic> completionResult) {
     _handleItemCompletion(completionResult);
@@ -497,122 +505,136 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     super.dispose();
   }
 
-  Project _updateProjectWithCompletion(Project project, dynamic completedItem, Task? parentTask, Stage? parentStage) {
-    final updatedTasks = project.tasks.map((t) {
-      // Если это задача верхнего уровня
-      if (completedItem is Task && t.name == completedItem.name) {
-        return completedItem;
+  // НОВЫЙ МЕТОД: Правильное обновление проектов
+  List<Project> _updateProjectsWithCompletion(
+      List<Project> projects,
+      dynamic completedItem,
+      Project? targetProject,
+      Task? targetTask,
+      Stage? targetStage,
+      dynamic updatedItem
+      ) {
+    return projects.map((project) {
+      // Если это не целевой проект, возвращаем без изменений
+      if (targetProject != null && project.name != targetProject.name) {
+        return project;
       }
 
-      // Если это этап или шаг внутри задачи
-      if (parentTask != null && t.name == parentTask.name) {
-        final updatedStages = t.stages.map((s) {
-          // Если это этап
-          if (completedItem is Stage && s.name == completedItem.name) {
-            return completedItem;
-          }
+      // Обновляем задачи в проекте
+      final updatedTasks = project.tasks.map((task) {
+        // Если это целевая задача
+        if (targetTask != null && task.name == targetTask.name) {
+          return _updateTaskWithCompletion(task, completedItem, targetStage, updatedItem);
+        }
 
-          // Если это шаг внутри этапа
-          if (parentStage != null && s.name == parentStage.name && completedItem is custom_step.Step) {
-            final updatedSteps = s.steps.map((step) =>
-            step.name == completedItem.name ? completedItem : step
-            ).toList();
-            return Stage(
-              name: s.name,
-              completedSteps: s.completedSteps,
-              totalSteps: s.totalSteps,
-              stageType: s.stageType,
-              isCompleted: s.isCompleted,
-              steps: updatedSteps,
-              plannedDate: s.plannedDate,
-              recurrence: s.recurrence,
-            );
-          }
+        // Если completedItem - это сама задача
+        if (completedItem is Task && task.name == completedItem.name) {
+          return updatedItem;
+        }
 
-          return s;
-        }).toList();
-
-        return Task(
-          name: t.name,
-          completedSteps: t.completedSteps,
-          totalSteps: t.totalSteps,
-          stages: updatedStages,
-          taskType: t.taskType,
-          recurrence: t.recurrence,
-          dueDate: t.dueDate,
-          isCompleted: t.isCompleted,
-          description: t.description,
-          plannedDate: t.plannedDate,
-        );
-      }
-
-      return t;
-    }).toList();
-
-    return Project(
-      name: project.name,
-      tasks: updatedTasks,
-    );
-  }
-
-  // В _TaskTrackerScreenState
-  void _resetDailyRecurringTasks() {
-    if (currentUser == null) return;
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final lastReset = _getLastResetDate();
-
-    // Сбрасываем статус только если сегодня новый день
-    if (lastReset == null || lastReset.isBefore(today)) {
-      print('🔄 Сброс статуса daily recurring задач на новый день');
-
-      final updatedProjects = currentUser!.projects.map((project) {
-        final updatedTasks = project.tasks.map((task) {
-          // Сбрасываем только daily recurring задачи
-          if (task.recurrence?.type == RecurrenceType.daily && task.isCompleted) {
-            return Task(
-              name: task.name,
-              completedSteps: 0,
-              totalSteps: task.totalSteps,
-              stages: task.stages,
-              taskType: task.taskType,
-              recurrence: task.recurrence,
-              dueDate: task.dueDate,
-              isCompleted: false, // СБРАСЫВАЕМ статус выполнения
-              description: task.description,
-              plannedDate: task.plannedDate,
-              colorValue: task.colorValue,
-              isTracked: task.isTracked,
-            );
-          }
-          return task;
-        }).toList();
-
-        return Project(name: project.name, tasks: updatedTasks);
+        return task;
       }).toList();
 
-      setState(() {
-        currentUser = AppUser(
-          username: currentUser!.username,
-          email: currentUser!.email,
-          projects: updatedProjects,
-          progressHistory: currentUser!.progressHistory,
-        );
-      });
+      return Project(name: project.name, tasks: updatedTasks.cast<Task>());
+    }).toList();
+  }
 
-      _saveLastResetDate(today);
-      _saveCurrentUser();
+// Вспомогательный метод: обновление задачи
+  Task _updateTaskWithCompletion(Task task, dynamic completedItem, Stage? targetStage, dynamic updatedItem) {
+    // Если completedItem - это этап
+    if (completedItem is Stage && targetStage != null) {
+      final updatedStages = task.stages.map((stage) {
+        if (stage.name == targetStage.name) {
+          return _updateStageWithCompletion(stage, completedItem, updatedItem);
+        }
+        return stage;
+      }).toList();
+
+      return Task(
+        name: task.name,
+        completedSteps: task.completedSteps,
+        totalSteps: task.totalSteps,
+        stages: updatedStages,
+        taskType: task.taskType,
+        recurrence: task.recurrence,
+        dueDate: task.dueDate,
+        isCompleted: task.isCompleted,
+        description: task.description,
+        plannedDate: task.plannedDate,
+        colorValue: task.colorValue,
+        isTracked: task.isTracked,
+      );
     }
+
+    // Если completedItem - это шаг
+    if (completedItem is custom_step.Step && targetStage != null) {
+      final updatedStages = task.stages.map((stage) {
+        if (stage.name == targetStage.name) {
+          final updatedSteps = stage.steps.map((step) {
+            if (step.name == completedItem.name) {
+              return updatedItem;
+            }
+            return step;
+          }).toList();
+
+          return Stage(
+            name: stage.name,
+            completedSteps: stage.completedSteps,
+            totalSteps: stage.totalSteps,
+            stageType: stage.stageType,
+            isCompleted: stage.isCompleted,
+            steps: updatedSteps.cast<custom_step.Step>(), // ← ДОБАВЬТЕ .cast<custom_step.Step>()
+            plannedDate: stage.plannedDate,
+            recurrence: stage.recurrence,
+          );
+        }
+        return stage;
+      }).toList();
+
+      return Task(
+        name: task.name,
+        completedSteps: task.completedSteps,
+        totalSteps: task.totalSteps,
+        stages: updatedStages,
+        taskType: task.taskType,
+        recurrence: task.recurrence,
+        dueDate: task.dueDate,
+        isCompleted: task.isCompleted,
+        description: task.description,
+        plannedDate: task.plannedDate,
+        colorValue: task.colorValue,
+        isTracked: task.isTracked,
+      );
+    }
+
+    return task;
   }
 
-  DateTime? _getLastResetDate() {
-    // Реализуйте хранение даты последнего сброса (например, в SharedPreferences)
-    return null;
-  }
+// Вспомогательный метод: обновление этапа
+  Stage _updateStageWithCompletion(Stage stage, dynamic completedItem, dynamic updatedItem) {
+    // Если completedItem - это шаг
+    if (completedItem is custom_step.Step) {
+      final updatedSteps = stage.steps.map((step) {
+        if (step.name == completedItem.name) {
+          return updatedItem;
+        }
+        return step;
+      }).toList();
 
-  void _saveLastResetDate(DateTime date) {
-    // Реализуйте сохранение даты последнего сброса
+      return Stage(
+        name: stage.name,
+        completedSteps: stage.completedSteps,
+        totalSteps: stage.totalSteps,
+        stageType: stage.stageType,
+        isCompleted: stage.isCompleted,
+        steps: updatedSteps.cast<custom_step.Step>(), // ← ДОБАВЬТЕ .cast<custom_step.Step>()
+        plannedDate: stage.plannedDate,
+        recurrence: stage.recurrence,
+      );
+    }
+
+    // Если completedItem - это сам этап
+    return updatedItem;
   }
 
   // В _TaskTrackerScreenState добавьте метод:

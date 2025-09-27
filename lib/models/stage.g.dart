@@ -8,7 +8,7 @@ part of 'stage.dart';
 
 class StageAdapter extends TypeAdapter<Stage> {
   @override
-  final int typeId = 6;
+  final int typeId = 5;
 
   @override
   Stage read(BinaryReader reader) {

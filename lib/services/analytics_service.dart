@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../models/app_user.dart';
 import '../models/progress_history.dart';
 import '../models/task.dart';
-import '../models/project.dart'; // ← ДОБАВИТЬ ЭТОТ ИМПОРТ
 
 class AnalyticsService {
   // Получить все отслеживаемые задачи из всех проектов
@@ -47,7 +46,8 @@ static Map<String, Map<DateTime, int>> aggregateTaskProgress(
     Task? parentTask = _findParentTaskForHistoryItem(user, historyItem);
     
     // 4. Если родительская задача найдена и она отслеживается, добавляем прогресс
-    if (parentTask != null && trackedTasks.any((t) => t.name == parentTask!.name)) {
+    //if (parentTask != null && trackedTasks.any((t) => t.name == parentTask!.name)) {
+    if (parentTask != null && trackedTasks.any((t) => t.name == parentTask.name)) {
       final currentValue = result[parentTask.name]?[itemDate] ?? 0;
       
       // Учитываем прогресс: для чекбоксов = 1 шаг, для пошаговых = реальные шаги

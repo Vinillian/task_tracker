@@ -151,7 +151,8 @@ class CompletionService {
 
   // Добавьте этот метод в CompletionService
   static Map<String, dynamic> completeRecurringTask(Task task, int stepsAdded) {
-    final bool wasCompleted = task.isCompleted;
+    //final bool wasCompleted = task.isCompleted;
+
 
     // Для recurring задач просто добавляем прогресс в историю
     // но не меняем основной статус выполнения

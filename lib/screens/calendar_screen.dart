@@ -239,30 +239,19 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final occurrenceDate = completionResult['occurrenceDate'] as DateTime?;
     final isRecurring = completionResult['isRecurring'] == true;
 
-    if (isRecurring && occurrenceDate != null && item is Task) {
-      // Для recurring задач используем новую систему
-      if (RecurrenceCompletionService.isOccurrenceCompleted(item, occurrenceDate)) {
-        RecurrenceCompletionService.unmarkOccurrenceCompleted(item, occurrenceDate);
-      } else {
-        RecurrenceCompletionService.markOccurrenceCompleted(item, occurrenceDate);
+    if (isRecurring && occurrenceDate != null) {
+      // Для recurring задач используем отдельную систему отслеживания
+      if (item is Task) {
+        if (RecurrenceCompletionService.isOccurrenceCompleted(item, occurrenceDate)) {
+          RecurrenceCompletionService.unmarkOccurrenceCompleted(item, occurrenceDate);
+        } else {
+          RecurrenceCompletionService.markOccurrenceCompleted(item, occurrenceDate);
+        }
       }
-
-      // Обновляем UI
-      setState(() {});
-    }
-    // Для обычных задач обработка остается в onItemCompleted
-  }
-
-  bool _isOccurrenceCompletedForStage(Stage stage, DateTime occurrenceDate) {
-    final today = DateTime.now();
-    final occurrenceDay = DateTime(occurrenceDate.year, occurrenceDate.month, occurrenceDate.day);
-    final todayNormalized = DateTime(today.year, today.month, today.day);
-
-    if (isSameDay(occurrenceDay, todayNormalized)) {
-      return stage.isCompleted;
     }
 
-    return false;
+    // Всегда вызываем колбэк для обновления UI
+    widget.onItemCompleted(completionResult);
   }
 
   bool _isOccurrenceCompletedForStep(custom_step.Step step, DateTime occurrenceDate) {
@@ -362,7 +351,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 return Container(
                   margin: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withOpacity(0.1), // Пока оставляем
                     border: Border.all(color: Colors.blue),
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -457,9 +446,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       print('📋 Задача: ${item['name']}, recurring: $isRecurring, completed: $isCompleted, today: $isToday');
 
                       // Логика доступности выполнения:
-                      // - Для recurring задач: можно выполнять только сегодняшний occurrence
-                      // - Для non-recurring задач: можно выполнять если не выполнена
-                      final bool canComplete = isRecurring ? isToday : !isCompleted;
+                      final bool canComplete = isRecurring
+                          ? isToday && !isCompleted // Для recurring: только сегодня и не выполнена
+                          : !isCompleted; // Для обычных: если не выполнена
 
                       return ListTile(
                         leading: Icon(
@@ -532,4 +521,19 @@ class _CalendarScreenState extends State<CalendarScreen> {
       }
     });
   }
+
+  // В lib/screens/calendar_screen.dart, в класс _CalendarScreenState добавьте:
+
+  bool _isOccurrenceCompletedForStage(Stage stage, DateTime occurrenceDate) {
+    final today = DateTime.now();
+    final occurrenceDay = DateTime(occurrenceDate.year, occurrenceDate.month, occurrenceDate.day);
+    final todayNormalized = DateTime(today.year, today.month, today.day);
+
+    if (isSameDay(occurrenceDay, todayNormalized)) {
+      return stage.isCompleted;
+    }
+
+    return false;
+  }
+
 }

@@ -5,7 +5,7 @@ part 'stage.g.dart';
 
 
 
-@HiveType(typeId: 6) // Новый typeId
+@HiveType(typeId: 5) // Новый typeId
 class Stage {
   @HiveField(0)
   final String name;

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../models/project.dart';
 import '../models/task.dart';
 import '../models/stage.dart';
-import '../services/firestore_service.dart';
 import '../services/task_service.dart';
 import '../widgets/dialogs.dart';
 import '../utils/progress_utils.dart';
@@ -29,7 +28,6 @@ class ProjectDetailScreen extends StatefulWidget {
 }
 
 class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
-  final FirestoreService _firestoreService = FirestoreService();
 
   @override
   Widget build(BuildContext context) {
@@ -519,7 +517,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   void _addTask() async {
-    final task = await showDialog<Task>(
+    //final task = await showDialog<Task>(
+    await showDialog<Task>( // ← ИСПРАВЛЕННАЯ ВЕРСИЯ
       context: context,
       builder: (context) => TaskEditDialog(
         onSave: (newTask) {
@@ -533,7 +532,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   void _editTask(Task task) async {
-    final updatedTask = await showDialog<Task>(
+    //final updatedTask = await showDialog<Task>(
+    await showDialog<Task>( // ← ИСПРАВЛЕННАЯ ВЕРСИЯ
       context: context,
       builder: (context) => TaskEditDialog(
         initialTask: task,
@@ -564,7 +564,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   void _addStage(Task task) async {
-    final stage = await showDialog<Stage>(
+    await showDialog<Stage>(
       context: context,
       builder: (context) => StageEditDialog(
         onSave: (newStage) {
@@ -578,7 +578,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   void _editStage(Stage stage, Task task) async {
-    final updatedStage = await showDialog<Stage>(
+    await showDialog<Stage>(
       context: context,
       builder: (context) => StageEditDialog(
         initialStage: stage,
@@ -609,7 +609,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   void _addStep(Stage stage, Task task) async {
-    final step = await showDialog<custom_step.Step>(
+    await showDialog<custom_step.Step>(
       context: context,
       builder: (context) => StepEditDialog(
         onSave: (newStep) {
@@ -623,7 +623,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   void _editStep(custom_step.Step step, Stage stage, Task task) async {
-    final updatedStep = await showDialog<custom_step.Step>(
+    await showDialog<custom_step.Step>(
       context: context,
       builder: (context) => StepEditDialog(
         initialStep: step,

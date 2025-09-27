@@ -9,9 +9,11 @@ import '../models/app_user.dart';
 import '../models/project.dart';
 import '../models/task.dart';
 import '../models/progress_history.dart';
-import '../models/step.dart';
+import '../models/step.dart' as custom_step;
 import '../models/stage.dart';
-import '../models/recurrence_completion.dart'; // ДОБАВЬТЕ ЭТУ СТРОКУ
+import '../models/recurrence_completion.dart';
+import '../models/recurrence.dart';
+
 
 class LocalRepository {
   static const String _userBoxName = 'userData';
@@ -61,28 +63,86 @@ class LocalRepository {
   }
 
   void _registerAdapters() {
-    if (!Hive.isAdapterRegistered(0)) {
+    try {
+      print('🔄 Регистрация адаптеров Hive...');
+
+      // Закрываем все боксы перед перерегистрацией
+      Hive.close();
+
+      // Регистрируем адаптеры в правильном порядке
+      if (!Hive.isAdapterRegistered(0)) {
+        Hive.registerAdapter(AppUserAdapter());
+      }
+      if (!Hive.isAdapterRegistered(1)) {
+        Hive.registerAdapter(ProjectAdapter());
+      }
+      if (!Hive.isAdapterRegistered(2)) {
+        Hive.registerAdapter(TaskAdapter());
+      }
+      if (!Hive.isAdapterRegistered(3)) {
+        Hive.registerAdapter(custom_step.StepAdapter());
+      }
+      if (!Hive.isAdapterRegistered(4)) {
+        Hive.registerAdapter(ProgressHistoryAdapter());
+      }
+      if (!Hive.isAdapterRegistered(5)) {
+        Hive.registerAdapter(StageAdapter());
+      }
+
+      // ВАЖНО: Сначала регистрируем enum, потом основной класс
+      if (!Hive.isAdapterRegistered(7)) {
+        Hive.registerAdapter(RecurrenceTypeAdapter());
+      }
+      if (!Hive.isAdapterRegistered(6)) {
+        Hive.registerAdapter(RecurrenceAdapter());
+      }
+      if (!Hive.isAdapterRegistered(8)) {
+        Hive.registerAdapter(RecurrenceCompletionAdapter());
+      }
+
+      print('✅ Все адаптеры зарегистрированы');
+    } catch (e) {
+      print('❌ Ошибка регистрации адаптеров: $e');
+      // Пробуем зарегистрировать только основные адаптеры
+      _registerBasicAdapters();
+    }
+  }
+
+  void _registerBasicAdapters() {
+    try {
+      print('🔄 Регистрация основных адаптеров...');
+
       Hive.registerAdapter(AppUserAdapter());
-    }
-    if (!Hive.isAdapterRegistered(1)) {
       Hive.registerAdapter(ProjectAdapter());
-    }
-    if (!Hive.isAdapterRegistered(2)) {
       Hive.registerAdapter(TaskAdapter());
-    }
-    if (!Hive.isAdapterRegistered(3)) {
-      Hive.registerAdapter(StepAdapter());
-    }
-    if (!Hive.isAdapterRegistered(8)) { // Измените с 7 на 8
-      Hive.registerAdapter(StageAdapter());
-    }
-    if (!Hive.isAdapterRegistered(4)) {
+      Hive.registerAdapter(custom_step.StepAdapter());
       Hive.registerAdapter(ProgressHistoryAdapter());
+      Hive.registerAdapter(StageAdapter());
+
+      print('✅ Основные адаптеры зарегистрированы');
+    } catch (e) {
+      print('❌ Ошибка регистрации основных адаптеров: $e');
     }
-    if (!Hive.isAdapterRegistered(9)) { // Измените с 8 на 9
-      Hive.registerAdapter(RecurrenceCompletionAdapter());
+  }
+
+  // Сохранение пользователя (с проверкой на recurring задачи)
+  Future<void> saveUser(AppUser user) async {
+    try {
+      // Проверяем, есть ли recurring задачи
+      final hasRecurringTasks = user.projects.any((project) =>
+          project.tasks.any((task) => task.recurrence != null));
+
+      if (hasRecurringTasks) {
+        print('⚠️ Пропускаем сохранение в Hive (recurring задачи)');
+        return;
+      }
+
+      await _userBox.put('currentUser', user);
+      print('✅ Пользователь сохранен в Hive: ${user.username}');
+    } catch (e) {
+      print('❌ Ошибка сохранения в Hive: $e');
+      rethrow;
     }
-    print('✅ Адаптеры зарегистрированы');
   }
 
   Future<void> _tryRecovery() async {
@@ -132,30 +192,26 @@ class LocalRepository {
         print('⚠️ Ошибка закрытия боксов: $e');
       }
 
-      // Удаляем файлы данных (только для мобильных)
+      // Удаляем файлы данных (только для мобильных, не для Web)
       if (!kIsWeb) {
         try {
           final appDocDir = await getApplicationDocumentsDirectory();
-          final userBoxFile = File('${appDocDir.path}/userData.hive');
-          final settingsBoxFile = File('${appDocDir.path}/settings.hive');
-          final userBoxLockFile = File('${appDocDir.path}/userData.lock');
-          final settingsBoxLockFile = File('${appDocDir.path}/settings.lock');
+          final hivePath = appDocDir.path;
 
-          if (await userBoxFile.exists()) {
-            await userBoxFile.delete();
-            print('✅ Удален userData.hive');
-          }
-          if (await settingsBoxFile.exists()) {
-            await settingsBoxFile.delete();
-            print('✅ Удален settings.hive');
-          }
-          if (await userBoxLockFile.exists()) {
-            await userBoxLockFile.delete();
-            print('✅ Удален userData.lock');
-          }
-          if (await settingsBoxLockFile.exists()) {
-            await settingsBoxLockFile.delete();
-            print('✅ Удален settings.lock');
+          // Удаляем файлы Hive простым способом
+          final hiveFiles = [
+            '$hivePath/userData.hive',
+            '$hivePath/settings.hive',
+            '$hivePath/userData.lock',
+            '$hivePath/settings.lock',
+          ];
+
+          for (final filePath in hiveFiles) {
+            final file = File(filePath);
+            if (await file.exists()) {
+              await file.delete();
+              print('✅ Удален $filePath');
+            }
           }
         } catch (e) {
           print('⚠️ Ошибка удаления файлов: $e');
@@ -169,17 +225,6 @@ class LocalRepository {
       print('✅ Поврежденные данные очищены');
     } catch (e) {
       print('❌ Ошибка очистки данных: $e');
-      rethrow;
-    }
-  }
-
-  // Сохранение пользователя
-  Future<void> saveUser(AppUser user) async {
-    try {
-      await _userBox.put('currentUser', user);
-      print('✅ Пользователь сохранен в Hive: ${user.username}');
-    } catch (e) {
-      print('❌ Ошибка сохранения в Hive: $e');
       rethrow;
     }
   }
@@ -305,39 +350,49 @@ class LocalRepository {
         return null;
       }
 
-      // Исправление: используем правильный способ получения списка боксов
-      final appDocDir = await getApplicationDocumentsDirectory();
-      final hiveDir = Directory(appDocDir.path);
-
-      if (!await hiveDir.exists()) {
-        print('⚠️ Директория Hive не существует');
+      // Для Web не ищем файловые резервные копии
+      if (kIsWeb) {
+        print('⚠️ Для Web поиск файловых резервных копий не поддерживается');
         return null;
       }
 
-      final files = await hiveDir.list().toList();
-      final boxNames = files
-          .where((file) => file.path.endsWith('.hive'))
-          .map((file) => file.uri.pathSegments.last.replaceAll('.hive', ''))
-          .toList();
+      // Для мобильных устройств ищем резервные копии
+      try {
+        final appDocDir = await getApplicationDocumentsDirectory();
+        final hiveDir = Directory(appDocDir.path);
 
-      print('🔍 Доступные боксы: $boxNames');
+        if (!await hiveDir.exists()) {
+          print('⚠️ Директория Hive не существует');
+          return null;
+        }
 
-      for (final boxName in boxNames) {
-        if (boxName.contains('backup') || boxName.contains('user')) {
-          print('🔍 Проверяем бокс: $boxName');
-          try {
-            final box = await Hive.openBox(boxName);
-            final data = box.get('userBackup');
-            if (data != null && data is AppUser) {
-              print('✅ Найдена резервная копия в боксе $boxName');
+        final files = await hiveDir.list().toList();
+        final boxNames = files
+            .where((file) => file.path.endsWith('.hive'))
+            .map((file) => file.uri.pathSegments.last.replaceAll('.hive', ''))
+            .toList();
+
+        print('🔍 Доступные боксы: $boxNames');
+
+        for (final boxName in boxNames) {
+          if (boxName.contains('backup') || boxName.contains('user')) {
+            print('🔍 Проверяем бокс: $boxName');
+            try {
+              final box = await Hive.openBox(boxName);
+              final data = box.get('userBackup');
+              if (data != null && data is AppUser) {
+                print('✅ Найдена резервная копия в боксе $boxName');
+                await box.close();
+                return data;
+              }
               await box.close();
-              return data;
+            } catch (e) {
+              print('❌ Ошибка доступа к боксу $boxName: $e');
             }
-            await box.close();
-          } catch (e) {
-            print('❌ Ошибка доступа к боксу $boxName: $e');
           }
         }
+      } catch (e) {
+        print('❌ Ошибка поиска файловых резервных копий: $e');
       }
     } catch (e) {
       print('❌ Ошибка поиска резервной копии: $e');

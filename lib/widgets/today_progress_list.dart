@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/app_user.dart';
 import '../models/progress_history.dart';
-import '../utils/progress_utils.dart';
+
 
 class TodayProgressList extends StatelessWidget {
   final AppUser? user;

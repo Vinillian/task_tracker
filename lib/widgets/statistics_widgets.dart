@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/app_user.dart';
-import '../models/task_type.dart';
 import '../utils/progress_utils.dart';
 import 'github_calendar.dart';
 
@@ -156,6 +155,22 @@ class StatisticsWidgets {
             );
           }).toList(),
         ],
+      ),
+    );
+  }
+
+  // Пример исправлений:
+  Widget build(BuildContext context) {
+    return const Card( // Добавить const
+      child: Padding( // Добавить const
+        padding: EdgeInsets.all(16),
+        child: Column( // Добавить const
+          children: [
+            Text('Статистика'), // Добавить const
+            SizedBox(height: 8), // Добавить const
+            // ...
+          ],
+        ),
       ),
     );
   }

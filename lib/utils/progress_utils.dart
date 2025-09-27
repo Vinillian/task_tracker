@@ -1,7 +1,5 @@
 // utils/progress_utils.dart
 import 'package:flutter/material.dart';
-import '../models/stage.dart';
-import '../models/step.dart' as custom_step;
 
 class ProgressUtils {
   /// Получение процента выполнения задачи

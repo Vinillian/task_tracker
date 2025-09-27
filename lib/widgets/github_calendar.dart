@@ -74,7 +74,11 @@ class GitHubCalendar extends StatelessWidget {
         if (steps > 0) {
           final normalizedDate = DateTime(date.year, date.month, date.day);
           if (map.containsKey(normalizedDate)) {
-            map[normalizedDate] = map[normalizedDate]! + 1;
+            //map[normalizedDate] = map[normalizedDate]! + 1;
+            if (map.containsKey(normalizedDate)) {
+              final currentValue = map[normalizedDate] ?? 0;
+              map[normalizedDate] = currentValue + 1;
+            }
           }
         }
       } catch (e) {
@@ -135,7 +139,7 @@ class GitHubCalendar extends StatelessWidget {
         if (currentMonth != null) {
           headers.add(SizedBox(
               width: width,
-              child: Center(child: Text(currentMonth!, style: const TextStyle(fontSize: 10, color: Colors.black54)))
+              child: Center(child: Text(currentMonth, style: const TextStyle(fontSize: 10, color: Colors.black54)))
           ));
         }
         currentMonth = label;
@@ -374,18 +378,4 @@ class GitHubCalendar extends StatelessWidget {
     return 'вкладов';
   }
 
-  void _checkDataFormat(AppUser user) {
-    print('=== ПРОВЕРКА ФОРМАТА ДАННЫХ ДЛЯ КАЛЕНДАРЯ ===');
-    print('Пользователь: ${user.username}');
-    print('Записей в истории: ${user.progressHistory.length}');
-
-    for (int i = 0; i < user.progressHistory.length; i++) {
-      final item = user.progressHistory[i];
-      print('Элемент $i тип: ${item.runtimeType}');
-      if (item is ProgressHistory) {
-        print('   Дата: ${item.date}, Шаги: ${item.stepsAdded}');
-      }
-    }
-    print('============================================');
-  }
 }
