@@ -1,74 +1,94 @@
-// lib/services/recurrence_completion_service.dart
-import '../models/recurrence_completion.dart';
 import '../models/task.dart';
-import '../repositories/local_repository.dart';
-import 'package:provider/provider.dart';
-import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-
+import '../models/recurrence_completion.dart';
+import 'completion_service.dart';
 
 class RecurrenceCompletionService {
-  static Future<bool> isOccurrenceCompleted(Task task, DateTime occurrenceDate, BuildContext context) async {
-    final localRepo = Provider.of<LocalRepository>(context, listen: false);
-    final completions = await _loadCompletions(localRepo);
+  final CompletionService _completionService;
 
-    return completions.any((completion) =>
-    completion.taskId == _getTaskId(task) &&
-        RecurrenceCompletion.isSameDay(completion.occurrenceDate, occurrenceDate));
+  RecurrenceCompletionService(this._completionService);
+
+  // Отмечает выполнение повторяющейся задачи на конкретную дату
+  RecurrenceCompletion completeRecurrenceTask(
+      Task task,
+      DateTime completionDate,
+      ) {
+    // Создаем запись о выполнении
+    final completion = RecurrenceCompletion(
+      id: '${task.id}_${completionDate.millisecondsSinceEpoch}',
+      originalTaskId: task.id,
+      taskTitle: task.title,
+      completedAt: completionDate,
+      taskType: task.type,
+      projectId: task.projectId,
+    );
+
+    // TODO: Сохранить completion в репозитории
+
+    return completion;
   }
 
-  static Future<void> markOccurrenceCompleted(Task task, DateTime occurrenceDate, BuildContext context) async {
-    final localRepo = Provider.of<LocalRepository>(context, listen: false);
-    final completions = await _loadCompletions(localRepo);
-
-    completions.add(RecurrenceCompletion(
-      taskId: _getTaskId(task),
-      occurrenceDate: DateTime(occurrenceDate.year, occurrenceDate.month, occurrenceDate.day),
-      completedAt: DateTime.now(),
-    ));
-
-    await _saveCompletions(completions, localRepo);
+  // Отменяет выполнение повторяющейся задачи
+  void uncompleteRecurrenceTask(String completionId) {
+    // TODO: Удалить запись о выполнении из репозитории
   }
 
-  static Future<void> unmarkOccurrenceCompleted(Task task, DateTime occurrenceDate, BuildContext context) async {
-    final localRepo = Provider.of<LocalRepository>(context, listen: false);
-    final completions = await _loadCompletions(localRepo);
-
-    completions.removeWhere((completion) =>
-    completion.taskId == _getTaskId(task) &&
-        RecurrenceCompletion.isSameDay(completion.occurrenceDate, occurrenceDate));
-
-    await _saveCompletions(completions, localRepo);
+  // Получает историю выполнений для повторяющейся задачи
+  List<DateTime> getCompletionHistory(
+      String taskId,
+      List<RecurrenceCompletion> allCompletions
+      ) {
+    return allCompletions
+        .where((completion) => completion.originalTaskId == taskId)
+        .map((completion) => completion.completedAt)
+        .toList();
   }
 
-  static String _getTaskId(Task task) {
-    // Более уникальный идентификатор
-    return '${task.name}_${task.totalSteps}_${task.plannedDate?.millisecondsSinceEpoch ?? 0}';
+  // Проверяет, выполнена ли задача на конкретную дату
+  bool isTaskCompletedOnDate(
+      String taskId,
+      DateTime date,
+      List<RecurrenceCompletion> allCompletions
+      ) {
+    final dateKey = DateTime(date.year, date.month, date.day);
+
+    return allCompletions.any((completion) {
+      if (completion.originalTaskId != taskId) return false;
+
+      final completedDate = completion.completedAt;
+      final completedDateKey = DateTime(
+          completedDate.year,
+          completedDate.month,
+          completedDate.day
+      );
+
+      return completedDateKey == dateKey;
+    });
   }
 
-  static Future<List<RecurrenceCompletion>> _loadCompletions(LocalRepository localRepo) async {
-    Box<RecurrenceCompletion> box;
-    if (Hive.isBoxOpen('recurrenceCompletions')) {
-      box = Hive.box<RecurrenceCompletion>('recurrenceCompletions');
-    } else {
-      box = await Hive.openBox<RecurrenceCompletion>('recurrenceCompletions');
-    }
-    return box.values.toList();
+  // Получает статистику выполнений для задачи
+  Map<String, dynamic> getCompletionStats(
+  String taskId,
+  List<RecurrenceCompletion> allCompletions,
+  int daysBack = 30
+  ) {
+  final taskCompletions = allCompletions
+      .where((completion) => completion.originalTaskId == taskId)
+      .toList();
+
+  final now = DateTime.now();
+  final startDate = now.subtract(Duration(days: daysBack));
+
+  final recentCompletions = taskCompletions
+      .where((completion) => completion.completedAt.isAfter(startDate))
+      .length;
+
+  return {
+  'totalCompletions': taskCompletions.length,
+  'recentCompletions': recentCompletions,
+  'completionRate': daysBack > 0 ? recentCompletions / daysBack : 0,
+  'lastCompletion': taskCompletions.isNotEmpty
+  ? taskCompletions.last.completedAt
+      : null,
+  };
   }
-
-
-  static Future<void> _saveCompletions(List<RecurrenceCompletion> completions, LocalRepository localRepo) async {
-    Box<RecurrenceCompletion> box;
-    if (Hive.isBoxOpen('recurrenceCompletions')) {
-      box = Hive.box<RecurrenceCompletion>('recurrenceCompletions');
-    } else {
-      box = await Hive.openBox<RecurrenceCompletion>('recurrenceCompletions');
-    }
-
-    await box.clear();
-    await box.addAll(completions);
-  }
-
-
 }

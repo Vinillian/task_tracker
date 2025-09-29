@@ -1,324 +1,539 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
-import '../main.dart';
-import '../models/app_user.dart';
 import '../models/task.dart';
-import '../models/stage.dart';
-import '../models/step.dart' as custom_step;
 import '../models/project.dart';
-import '../services/recurrence_service.dart';
-import '../services/recurrence_completion_service.dart';
-import '../widgets/detailed_completion_dialog.dart';
+import '../services/task_service.dart';
+import '../services/completion_service.dart';
+import '../widgets/task_list_item.dart';
 
-class PlanningCalendarScreen extends StatelessWidget {
-  final AppUser? currentUser;
-  final Function(Map<String, dynamic>) onItemCompleted;
+class PlanningCalendarScreen extends StatefulWidget {
+  final List<Project> projects;
 
-  const PlanningCalendarScreen({
-    super.key,
-    required this.currentUser,
-    required this.onItemCompleted,
-  });
+  const PlanningCalendarScreen({Key? key, required this.projects}) : super(key: key);
+
+  @override
+  _PlanningCalendarScreenState createState() => _PlanningCalendarScreenState();
+}
+
+class _PlanningCalendarScreenState extends State<PlanningCalendarScreen> {
+  late TaskService _taskService;
+  late CompletionService _completionService;
+  DateTime _selectedDate = DateTime.now();
+  Map<DateTime, List<Task>> _tasksByDate = {};
+  Map<String, bool> _expandedTasks = {}; // Для отслеживания раскрытых задач
+
+  @override
+  void initState() {
+    super.initState();
+    _completionService = CompletionService();
+    _taskService = TaskService(_completionService);
+    _groupTasksByDate();
+  }
+
+  @override
+  void didUpdateWidget(PlanningCalendarScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.projects != oldWidget.projects) {
+      _groupTasksByDate();
+    }
+  }
+
+  // Группируем задачи по датам для планирования
+  void _groupTasksByDate() {
+    _tasksByDate = {};
+
+    final allTasks = _getAllTasks();
+
+    for (final task in allTasks) {
+      // Для задач с dueDate
+      if (task.dueDate != null) {
+        final date = DateTime(task.dueDate!.year, task.dueDate!.month, task.dueDate!.day);
+        _tasksByDate.putIfAbsent(date, () => []).add(task);
+      }
+
+      // Для незавершенных задач без даты - предлагаем запланировать
+      if (!task.isCompleted && task.dueDate == null) {
+        final today = DateTime.now();
+        final date = DateTime(today.year, today.month, today.day);
+        _tasksByDate.putIfAbsent(date, () => []).add(task);
+      }
+    }
+
+    setState(() {});
+  }
+
+  // Получаем все задачи (включая подзадачи)
+  List<Task> _getAllTasks() {
+    final allTasks = <Task>[];
+
+    for (final project in widget.projects) {
+      allTasks.addAll(project.allTasks);
+    }
+
+    return allTasks;
+  }
+
+  // Получаем задачи для выбранной даты
+  List<Task> _getTasksForSelectedDate() {
+    final dateKey = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    return _tasksByDate[dateKey] ?? [];
+  }
+
+  // Перемещаем задачу на выбранную дату
+  void _rescheduleTask(Task task, DateTime newDate) {
+    setState(() {
+      // Удаляем задачу из старой даты
+      for (final date in _tasksByDate.keys) {
+        _tasksByDate[date]?.removeWhere((t) => t.id == task.id);
+      }
+
+      // Добавляем на новую дату
+      final newDateKey = DateTime(newDate.year, newDate.month, newDate.day);
+      _tasksByDate.putIfAbsent(newDateKey, () => []).add(task);
+
+      // TODO: Обновить задачу в репозитории с новой датой
+      // final updatedTask = task.copyWith(dueDate: newDate);
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Задача "${task.title}" перенесена на ${newDate.day}.${newDate.month}.${newDate.year}')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final plannedItems = <_PlannedItem>[];
-
-    void _addTaskOccurrences(Project project, Task task, DateTime startDate) {
-      final occurrences = task.recurrence != null
-          ? RecurrenceService.generateOccurrences(
-        recurrence: task.recurrence!,
-        startDate: startDate,
-        untilDate: DateTime.now().add(const Duration(days: 30)),
-      )
-          : [startDate];
-
-      for (final date in occurrences) {
-        plannedItems.add(_PlannedItem(
-          type: 'Задача',
-          name: task.name,
-          date: date,
-          projectName: project.name,
-          isRecurring: task.recurrence != null,
-          item: task,
-          onTap: () => _showCompletionDialog(
-            context,
-            task,
-            project,
-            null,
-            null,
-            task.recurrence != null ? date : null,
-          ),
-        ));
-      }
-    }
-
-    void _addStageOccurrences(Project project, Task task, Stage stage, DateTime startDate) {
-      final occurrences = stage.recurrence != null
-          ? RecurrenceService.generateOccurrences(
-        recurrence: stage.recurrence!,
-        startDate: startDate,
-        untilDate: DateTime.now().add(const Duration(days: 30)),
-      )
-          : [startDate];
-
-      for (final date in occurrences) {
-        plannedItems.add(_PlannedItem(
-          type: 'Этап',
-          name: stage.name,
-          date: date,
-          projectName: project.name,
-          taskName: task.name,
-          isRecurring: stage.recurrence != null,
-          item: stage,
-          onTap: () => _showCompletionDialog(
-            context,
-            stage,
-            project,
-            task,
-            null,
-            stage.recurrence != null ? date : null,
-          ),
-        ));
-      }
-    }
-
-    void _addStepOccurrences(Project project, Task task, Stage stage, custom_step.Step step, DateTime startDate) {
-      final occurrences = step.recurrence != null
-          ? RecurrenceService.generateOccurrences(
-        recurrence: step.recurrence!,
-        startDate: startDate,
-        untilDate: DateTime.now().add(const Duration(days: 30)),
-      )
-          : [startDate];
-
-      for (final date in occurrences) {
-        plannedItems.add(_PlannedItem(
-          type: 'Шаг',
-          name: step.name,
-          date: date,
-          projectName: project.name,
-          taskName: task.name,
-          stageName: stage.name,
-          isRecurring: step.recurrence != null,
-          item: step,
-          onTap: () => _showCompletionDialog(
-            context,
-            step,
-            project,
-            task,
-            stage,
-            step.recurrence != null ? date : null,
-          ),
-        ));
-      }
-    }
-
-    void addTaskItems(Project project, Task task) {
-      if (task.plannedDate != null) {
-        _addTaskOccurrences(project, task, task.plannedDate!);
-      }
-
-      for (final stage in task.stages) {
-        if (stage.plannedDate != null) {
-          _addStageOccurrences(project, task, stage, stage.plannedDate!);
-        }
-
-        for (final step in stage.steps) {
-          if (step.plannedDate != null) {
-            _addStepOccurrences(project, task, stage, step, step.plannedDate!);
-          }
-        }
-      }
-    }
-
-    if (currentUser != null) {
-      for (final project in currentUser!.projects) {
-        for (final task in project.tasks) {
-          addTaskItems(project, task);
-        }
-      }
-    }
-
-    plannedItems.sort((a, b) => a.date.compareTo(b.date));
-
-    final groupedItems = <DateTime, List<_PlannedItem>>{};
-    for (final item in plannedItems) {
-      final date = DateTime(item.date.year, item.date.month, item.date.day);
-      groupedItems.putIfAbsent(date, () => []).add(item);
-    }
-
-    final sortedDates = groupedItems.keys.toList()..sort();
+    final tasksForSelectedDate = _getTasksForSelectedDate();
+    final completedTasksCount = tasksForSelectedDate.where((task) => task.isCompleted).length;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Календарь планирования'),
-      ),
-      body: groupedItems.isEmpty
-          ? const Center(
-        child: Text(
-          'Нет запланированных задач.\nДобавьте дату выполнения в задачу, этап или шаг.',
-          textAlign: TextAlign.center,
-        ),
-      )
-          : ListView.builder(
-        itemCount: sortedDates.length,
-        itemBuilder: (context, index) {
-          final date = sortedDates[index];
-          final items = groupedItems[date]!;
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  DateFormat('dd MMMM yyyy, EEEE').format(date),
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+        title: Text('Планирование'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.today),
+            onPressed: () {
+              setState(() {
+                _selectedDate = DateTime.now();
+              });
+            },
+            tooltip: 'Сегодня',
+          ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              _handleMenuAction(value);
+            },
+            itemBuilder: (BuildContext context) => [
+              PopupMenuItem(
+                value: 'show_completed',
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text('Показать выполненные'),
+                  ],
                 ),
               ),
-              ...items.map((item) => _buildPlannedItem(context, item)).toList(),
+              PopupMenuItem(
+                value: 'hide_completed',
+                child: Row(
+                  children: [
+                    Icon(Icons.hide_source, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Text('Скрыть выполненные'),
+                  ],
+                ),
+              ),
             ],
-          );
-        },
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Статистика дня
+          _buildDayStats(completedTasksCount, tasksForSelectedDate.length),
+          // Календарь для выбора даты
+          _buildDateSelector(),
+          // Список задач на выбранную дату
+          Expanded(
+            child: _buildTaskList(tasksForSelectedDate),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildPlannedItem(BuildContext context, _PlannedItem item) {
-    return FutureBuilder<bool>(
-      future: item.isRecurring && item.item is Task
-          ? RecurrenceCompletionService.isOccurrenceCompleted(item.item as Task, item.date, context)
-          : Future.value(
-        item.item is Task
-            ? (item.item as Task).isCompleted
-            : item.item is Stage
-            ? (item.item as Stage).isCompleted
-            : (item.item as custom_step.Step).isCompleted,
-      ),
-      builder: (context, snapshot) {
-        final isCompleted = snapshot.data ?? false;
+  Widget _buildDayStats(int completedCount, int totalCount) {
+    final progress = totalCount > 0 ? completedCount / totalCount : 0.0;
 
-        return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: ListTile(
-            leading: _getIconForType(item.type),
-            title: Row(
+    return Card(
+      margin: EdgeInsets.all(16),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Text(
+              '${_selectedDate.day}.${_selectedDate.month}.${_selectedDate.year}',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: progress,
+              backgroundColor: Colors.grey.shade200,
+              color: _getProgressColor(progress),
+            ),
+            SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  child: Text(
-                    item.name,
+                Text(
+                  'Прогресс: ${(progress * 100).toStringAsFixed(1)}%',
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                ),
+                Text(
+                  '$completedCount/$totalCount задач',
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateSelector() {
+    return Container(
+      height: 80,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        children: List.generate(30, (index) {
+          final date = DateTime.now().add(Duration(days: index));
+          final isSelected = _isSameDay(date, _selectedDate);
+          final hasTasks = _tasksByDate.containsKey(DateTime(date.year, date.month, date.day));
+          final isToday = _isSameDay(date, DateTime.now());
+
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedDate = date;
+              });
+            },
+            child: Container(
+              width: 60,
+              margin: EdgeInsets.symmetric(horizontal: 4),
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? Colors.blue
+                    : isToday
+                    ? Colors.blue.shade50
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isToday && !isSelected ? Colors.blue : Colors.transparent,
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    _getWeekdayName(date.weekday),
                     style: TextStyle(
-                      decoration: isCompleted ? TextDecoration.lineThrough : TextDecoration.none,
+                      fontSize: 12,
+                      color: isSelected ? Colors.white : Colors.grey.shade600,
                     ),
                   ),
-                ),
-                if (item.isRecurring)
-                  const Icon(Icons.repeat, size: 16, color: Colors.blue),
-              ],
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${item.type} • ${item.projectName}'),
-                if (item.taskName != null) Text('Задача: ${item.taskName}'),
-                if (item.stageName != null) Text('Этап: ${item.stageName}'),
-                Text('На: ${DateFormat('HH:mm').format(item.date)}'),
-                if (item.isRecurring)
+                  SizedBox(height: 4),
                   Text(
-                    isCompleted ? '✅ Выполнено' : '⏳ Ожидает',
-                    style: TextStyle(color: isCompleted ? Colors.green : Colors.orange),
+                    '${date.day}',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: isSelected ? Colors.white : Colors.black,
+                    ),
                   ),
-              ],
-            ),
-            trailing: IconButton(
-              icon: Icon(
-                isCompleted ? Icons.check_circle : Icons.check_circle_outline,
-                color: isCompleted ? Colors.green : Colors.grey,
+                  if (hasTasks)
+                    Container(
+                      margin: EdgeInsets.only(top: 2),
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: isSelected ? Colors.white : Colors.blue,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                ],
               ),
-              onPressed: () {
-                item.onTap();
-                try {
-                  Provider.of<CalendarRefresh>(context, listen: false).refresh();
-                } catch (_) {}
-              },
-              tooltip: isCompleted ? 'Снять отметку' : 'Отметить выполнение',
             ),
-            onTap: () {
-              item.onTap();
-              try {
-                Provider.of<CalendarRefresh>(context, listen: false).refresh();
-              } catch (_) {}
-            },
-          ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildTaskList(List<Task> tasks) {
+    if (tasks.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.schedule, size: 64, color: Colors.grey.shade300),
+            SizedBox(height: 16),
+            Text(
+              'Нет задач на ${_selectedDate.day}.${_selectedDate.month}.${_selectedDate.year}',
+              style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+            ),
+            SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: _showUnplannedTasks,
+              child: Text('Показать незапланированные задачи'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: EdgeInsets.all(8),
+      itemCount: tasks.length,
+      itemBuilder: (context, index) {
+        final task = tasks[index];
+        final isExpanded = _expandedTasks[task.id] ?? false;
+
+        return Column(
+          children: [
+            TaskListItem(
+              task: task,
+              nestingLevel: task.nestingLevel,
+              onTap: () => _toggleTaskExpansion(task),
+              onComplete: () => _toggleTaskCompletion(task),
+              onAddSubtask: task.canAddSubtask() ? () => _showAddSubtaskDialog(task) : null,
+              onEdit: () => _showRescheduleDialog(task),
+              onDelete: () => _removeFromPlanning(task),
+              isSelected: false,
+            ),
+            // Подзадачи (если раскрыто)
+            if (isExpanded && task.hasSubtasks)
+              ...task.subtasks.map((subtask) => Padding(
+                padding: EdgeInsets.only(left: 16),
+                child: TaskListItem(
+                  task: subtask,
+                  nestingLevel: subtask.nestingLevel,
+                  onTap: () => _toggleSubtaskCompletion(subtask, task),
+                  onComplete: () => _toggleSubtaskCompletion(subtask, task),
+                  onAddSubtask: null, // Подзадачи не могут иметь своих подзадач на 3 уровне
+                  onEdit: () => _showRescheduleDialog(subtask),
+                  onDelete: () => _removeFromPlanning(subtask),
+                  isSelected: false,
+                ),
+              )),
+          ],
         );
       },
     );
   }
 
-  Icon _getIconForType(String type) {
-    switch (type) {
-      case 'Задача':
-        return const Icon(Icons.task, color: Colors.blue);
-      case 'Этап':
-        return const Icon(Icons.album, color: Colors.green);
-      case 'Шаг':
-        return const Icon(Icons.star, color: Colors.orange);
-      default:
-        return const Icon(Icons.calendar_today);
+  // === ОБРАБОТЧИКИ СОБЫТИЙ ===
+
+  void _toggleTaskExpansion(Task task) {
+    setState(() {
+      _expandedTasks[task.id] = !(_expandedTasks[task.id] ?? false);
+    });
+  }
+
+  void _toggleTaskCompletion(Task task) {
+    setState(() {
+      final updatedTask = task.isCompleted
+          ? _taskService.uncompleteTask(task)
+          : _taskService.completeTask(task);
+
+      // Обновляем задачу в группировке
+      _updateTaskInGrouping(updatedTask);
+
+      // TODO: Сохранить в репозитории
+    });
+  }
+
+  void _toggleSubtaskCompletion(Task subtask, Task parentTask) {
+    setState(() {
+      final updatedSubtask = subtask.isCompleted
+          ? _taskService.uncompleteTask(subtask)
+          : _taskService.completeTask(subtask);
+
+      final updatedParentTask = parentTask.updateSubtask(subtask.id, updatedSubtask);
+
+      // Обновляем обе задачи в группировке
+      _updateTaskInGrouping(updatedSubtask);
+      _updateTaskInGrouping(updatedParentTask);
+
+      // TODO: Сохранить в репозитории
+    });
+  }
+
+  void _updateTaskInGrouping(Task updatedTask) {
+    for (final date in _tasksByDate.keys) {
+      final index = _tasksByDate[date]?.indexWhere((t) => t.id == updatedTask.id);
+      if (index != null && index >= 0) {
+        _tasksByDate[date]![index] = updatedTask;
+      }
     }
   }
 
-  void _showCompletionDialog(
-      BuildContext context,
-      dynamic item, [
-        Project? project,
-        Task? task,
-        Stage? stage,
-        DateTime? occurrenceDate,
-      ]) {
+  void _showRescheduleDialog(Task task) {
     showDialog(
       context: context,
-      builder: (context) => DetailedCompletionDialog(
-        item: item,
-        project: project,
-        task: task,
-        stage: stage,
-        occurrenceDate: occurrenceDate,
+      builder: (context) => AlertDialog(
+        title: Text('Перенести задачу'),
+        content: Text('Выберите новую дату для задачи "${task.title}"'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _showDatePickerForReschedule(task);
+            },
+            child: Text('Выбрать дату'),
+          ),
+        ],
       ),
-    ).then((result) {
-      if (result != null) {
-        onItemCompleted(result);
-      }
+    );
+  }
+
+  void _showDatePickerForReschedule(Task task) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+    );
+
+    if (picked != null) {
+      _rescheduleTask(task, picked);
+    }
+  }
+
+  void _removeFromPlanning(Task task) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Убрать из планирования?'),
+        content: Text('Задача "${task.title}" будет убрана из планирования на ${_selectedDate.day}.${_selectedDate.month}.${_selectedDate.year}'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _performRemoveFromPlanning(task);
+            },
+            child: Text('Убрать', style: TextStyle(color: Colors.orange)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _performRemoveFromPlanning(Task task) {
+    setState(() {
+      final dateKey = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+      _tasksByDate[dateKey]?.removeWhere((t) => t.id == task.id);
+
+      // TODO: Убрать dueDate у задачи в репозитории
+      // final updatedTask = task.copyWith(dueDate: null);
     });
   }
+
+  void _showAddSubtaskDialog(Task task) {
+    // TODO: Реализовать диалог добавления подзадачи
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Добавление подзадачи для: ${task.title}')),
+    );
+  }
+
+  void _showUnplannedTasks() {
+    final unplannedTasks = _getAllTasks().where((task) =>
+    !task.isCompleted && task.dueDate == null
+    ).toList();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Незапланированные задачи'),
+        content: Container(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: unplannedTasks.length,
+            itemBuilder: (context, index) {
+              final task = unplannedTasks[index];
+              return ListTile(
+                title: Text(task.title),
+                subtitle: task.projectId.isNotEmpty ? Text('Проект: ${_getProjectName(task.projectId)}') : null,
+                trailing: IconButton(
+                  icon: Icon(Icons.schedule),
+                  onPressed: () => _rescheduleTask(task, _selectedDate),
+                  tooltip: 'Запланировать на выбранную дату',
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Закрыть'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleMenuAction(String value) {
+    switch (value) {
+      case 'show_completed':
+      // TODO: Реализовать показ выполненных задач
+        break;
+      case 'hide_completed':
+      // TODO: Реализовать скрытие выполненных задач
+        break;
+    }
+  }
+
+  // === ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ===
+
+  String _getProjectName(String projectId) {
+    final project = widget.projects.firstWhere(
+          (p) => p.id == projectId,
+      orElse: () => Project(
+        id: '',
+        name: 'Неизвестный проект',
+        tasks: [],
+        createdAt: DateTime.now(),
+        isCompleted: false,
+      ),
+    );
+    return project.name;
+  }
+
+  bool _isSameDay(DateTime date1, DateTime date2) {
+    return date1.year == date2.year &&
+        date1.month == date2.month &&
+        date1.day == date2.day;
+  }
+
+  String _getWeekdayName(int weekday) {
+    const weekdays = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+    return weekdays[weekday - 1];
+  }
+
+  Color _getProgressColor(double progress) {
+    if (progress < 0.3) return Colors.red;
+    if (progress < 0.7) return Colors.orange;
+    return Colors.green;
+  }
 }
-
-class _PlannedItem {
-  final String type;
-  final String name;
-  final DateTime date;
-  final String projectName;
-  final String? taskName;
-  final String? stageName;
-  final bool isRecurring;
-  final dynamic item;
-  final VoidCallback onTap;
-
-  _PlannedItem({
-    required this.type,
-    required this.name,
-    required this.date,
-    required this.projectName,
-    this.taskName,
-    this.stageName,
-    this.isRecurring = false,
-    required this.item,
-    required this.onTap,
-  });
-}
-
