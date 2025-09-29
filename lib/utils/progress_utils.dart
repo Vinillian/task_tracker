@@ -1,5 +1,8 @@
 // utils/progress_utils.dart
 import 'package:flutter/material.dart';
+import '../models/task.dart';
+
+
 
 class ProgressUtils {
   /// Получение процента выполнения задачи
@@ -18,6 +21,27 @@ class ProgressUtils {
       return Colors.green;
     }
   }
+
+  double calculateTaskProgress(Task task) {
+    if (task.taskType == 'singleStep') {
+      return task.isCompleted ? 1.0 : 0.0;
+    }
+
+    if (task.totalSteps > 0) {
+      return task.completedSteps / task.totalSteps;
+    }
+
+    if (task.stages.isNotEmpty) {
+      final total = task.stages.length;
+      final done = task.stages.where((s) => s.isCompleted).length;
+      return total > 0 ? done / total : 0.0;
+    }
+
+    return 0.0;
+  }
+
+
+
 
   /// Анимация прогресса
   static Widget buildAnimatedProgressBar(double progress, {double height = 8}) {

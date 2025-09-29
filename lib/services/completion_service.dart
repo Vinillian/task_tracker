@@ -1,171 +1,112 @@
-// lib/services/completion_service.dart
 import '../models/task.dart';
-import '../models/stage.dart';
-import '../models/step.dart' as custom_step;
+import '../models/project.dart';
 import '../models/progress_history.dart';
-import '../services/task_service.dart';
 
 class CompletionService {
-  // Обработка выполнения элемента и обновление прогресса
-  static Map<String, dynamic> completeItem(
-      dynamic item, {
-        required int stepsAdded,
-        required String itemName,
-        required String itemType,
-      }) {
-    dynamic updatedItem;
-    int actualSteps = stepsAdded;
+  // Основной метод завершения задачи
+  Task completeTask(Task task, {bool isCompleted = true}) {
+    final updatedTask = task.copyWith(
+      isCompleted: isCompleted,
+      completedAt: isCompleted ? DateTime.now() : null,
+    );
 
-    print('🔄 Выполнение элемента: $itemName, тип: $itemType, шаги: $stepsAdded');
+    // Обновляем прогресс родительской задачи
+    return _updateTaskProgress(updatedTask);
+  }
 
-    // Обновляем элемент в зависимости от его типа
-    if (item is Task) {
-      if (item.taskType == "singleStep") {
-        print('✅ Это одношаговая задача - переключаем выполнение');
-        updatedItem = TaskService.toggleTaskCompletion(item);
-        actualSteps = updatedItem.isCompleted ? 1 : -1;
-        print('📊 Новый статус выполнения: ${updatedItem.isCompleted}');
-      } else {
-        print('✅ Это пошаговая задача - добавляем прогресс');
-        updatedItem = TaskService.addProgressToTask(item, stepsAdded);
-        actualSteps = stepsAdded;
+  // Завершение подзадачи
+  Task completeSubtask(Task parentTask, String subtaskId, {bool isCompleted = true}) {
+    final updatedSubtasks = parentTask.subtasks.map((subtask) {
+      if (subtask.id == subtaskId) {
+        return completeTask(subtask, isCompleted: isCompleted);
       }
-    } else if (item is Stage) {
-      if (item.stageType == "singleStep") {
-        print('✅ Это одношаговый этап - переключаем выполнение');
-        updatedItem = TaskService.toggleStageCompletion(item);
-        actualSteps = updatedItem.isCompleted ? 1 : -1;
-      } else {
-        print('✅ Это пошаговый этап - добавляем прогресс');
-        updatedItem = TaskService.addProgressToStage(item, stepsAdded);
-        actualSteps = stepsAdded;
-      }
-    } else if (item is custom_step.Step) {
-      if (item.stepType == "singleStep") {
-        print('✅ Это одношаговый шаг - переключаем выполнение');
-        updatedItem = TaskService.toggleStepCompletion(item);
-        actualSteps = updatedItem.isCompleted ? 1 : -1;
-      } else {
-        print('✅ Это пошаговый шаг - добавляем прогресс');
-        updatedItem = TaskService.addProgressToStep(item, stepsAdded);
-        actualSteps = stepsAdded;
-      }
-    } else {
-      print('❌ Неизвестный тип элемента: ${item.runtimeType}');
-      return {
-        'updatedItem': item,
-        'progressHistory': ProgressHistory(
-          date: DateTime.now(),
-          itemName: itemName,
-          stepsAdded: 0,
-          itemType: itemType,
-        ),
-      };
+      return subtask;
+    }).toList();
+
+    final updatedParent = parentTask.copyWith(subtasks: updatedSubtasks);
+    return _updateTaskProgress(updatedParent);
+  }
+
+  // Рекурсивное обновление прогресса задачи
+  Task _updateTaskProgress(Task task) {
+    if (!task.hasSubtasks) {
+      return task; // Задача без подзадач - возвращаем как есть
     }
 
-    // Создаем запись в истории прогресса
-    final progressHistory = ProgressHistory(
-      date: DateTime.now(),
-      itemName: itemName,
-      stepsAdded: actualSteps,
-      itemType: itemType,
+    // Расчет прогресса на основе подзадач
+    final completedSubtasks = task.calculateCompletedSubtasks();
+    final totalSubtasks = task.calculateTotalSubtasks();
+    final allSubtasksCompleted = task.subtasks.every((subtask) => subtask.isCompleted);
+
+    return task.copyWith(
+      isCompleted: allSubtasksCompleted,
+      completedSubtasks: completedSubtasks,
+      totalSubtasks: totalSubtasks,
+      completedAt: allSubtasksCompleted ? DateTime.now() : null,
     );
-
-    print('📝 Создана запись истории: $itemName, шагов: $actualSteps');
-
-    return {
-      'updatedItem': updatedItem,
-      'progressHistory': progressHistory,
-    };
   }
 
-  // Получение типа элемента для истории
-  static String getItemType(dynamic item) {
-    if (item is Task) return 'task';
-    if (item is Stage) return 'stage';
-    if (item is custom_step.Step) return 'step';
-    return 'unknown';
+  // Обновление прогресса в проекте
+  Project updateProjectProgress(Project project, String updatedTaskId, Task updatedTask) {
+    return project.updateTask(updatedTaskId, updatedTask);
   }
 
-  // Получение имени элемента для истории
-  static String getItemName(dynamic item) {
-    return item.name;
-  }
-
-  static Map<String, dynamic> completeItemWithHistory({
-    required dynamic item,
-    required int stepsAdded,
-    required String itemName,
-    required String itemType,
-    required List<dynamic> currentHistory,
-  }) {
-    final result = completeItem(
-      item,
-      stepsAdded: stepsAdded,
-      itemName: itemName,
-      itemType: itemType,
+  // Создание записи в истории прогресса
+  ProgressHistory createProgressHistory(Task task, DateTime completedAt) {
+    return ProgressHistory(
+      id: '${task.id}_${completedAt.millisecondsSinceEpoch}',
+      taskId: task.id,
+      taskTitle: task.title,
+      completedAt: completedAt,
+      taskType: task.type,
+      projectId: task.projectId,
+      nestingLevel: task.nestingLevel,
     );
+  }
 
-    // Добавляем в историю только если были реальные изменения
-    if (result['progressHistory'].stepsAdded != 0) {
-      final updatedHistory = List<dynamic>.from(currentHistory)
-        ..add(result['progressHistory']);
-
-      print('✅ Добавлено в историю прогресса');
-
-      return {
-        'updatedItem': result['updatedItem'],
-        'updatedHistory': updatedHistory,
-      };
+  // Проверка валидности состояния задачи
+  bool validateTaskState(Task task) {
+    if (task.completedSubtasks > task.totalSubtasks) {
+      return false;
+    }
+    if (task.isCompleted && task.totalSubtasks > 0 && task.completedSubtasks != task.totalSubtasks) {
+      return false;
     }
 
-    print('⚠️ Изменений нет, история не обновлена');
+    // Рекурсивная проверка подзадач
+    for (final subtask in task.subtasks) {
+      if (!validateTaskState(subtask)) {
+        return false;
+      }
+    }
 
-    return {
-      'updatedItem': result['updatedItem'],
-      'updatedHistory': currentHistory,
-    };
+    return true;
   }
 
-  // Обработка выполнения с автоматическим переносом daily задач
+  // Исправление некорректного состояния задачи
+  Task fixTaskState(Task task) {
+    var fixedTask = task;
 
-  static Map<String, dynamic> completeItemWithAutoMove({
-    required dynamic item,
-    required int stepsAdded,
-    required String itemName,
-    required String itemType,
-    required List<dynamic> currentHistory,
-  }) {
-    print('🔄 Выполнение с авто-переносом: $itemName');
+    // Исправляем completedSubtasks
+    if (fixedTask.completedSubtasks > fixedTask.totalSubtasks) {
+      fixedTask = fixedTask.copyWith(completedSubtasks: fixedTask.totalSubtasks);
+    }
 
-    // Для recurring задач - просто выполняем без изменений оригинала
-    // Статус будет сбрасываться отдельным механизмом
-    return completeItemWithHistory(
-      item: item,
-      stepsAdded: stepsAdded,
-      itemName: itemName,
-      itemType: itemType,
-      currentHistory: currentHistory,
-    );
-  }
+    // Исправляем isCompleted
+    if (fixedTask.hasSubtasks) {
+      final allSubtasksCompleted = fixedTask.subtasks.every((subtask) => subtask.isCompleted);
+      if (fixedTask.isCompleted != allSubtasksCompleted) {
+        fixedTask = fixedTask.copyWith(isCompleted: allSubtasksCompleted);
+      }
+    }
 
-  // Добавьте этот метод в CompletionService
-  static Map<String, dynamic> completeRecurringTask(Task task, int stepsAdded) {
-    //final bool wasCompleted = task.isCompleted;
+    // Рекурсивно исправляем подзадачи
+    final fixedSubtasks = fixedTask.subtasks.map((subtask) => fixTaskState(subtask)).toList();
+    fixedTask = fixedTask.copyWith(subtasks: fixedSubtasks);
 
+    // Пересчитываем прогресс
+    fixedTask = _updateTaskProgress(fixedTask);
 
-    // Для recurring задач просто добавляем прогресс в историю
-    // но не меняем основной статус выполнения
-    final progressHistory = ProgressHistory(
-      date: DateTime.now(),
-      itemName: task.name,
-      stepsAdded: stepsAdded,
-      itemType: 'task',
-    );
-
-    return {
-      'updatedItem': task, // Не меняем задачу для recurring
-      'progressHistory': progressHistory,
-    };
+    return fixedTask;
   }
 }

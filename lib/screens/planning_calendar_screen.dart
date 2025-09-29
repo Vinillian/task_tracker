@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../main.dart';
 import '../models/app_user.dart';
 import '../models/task.dart';
 import '../models/stage.dart';
@@ -40,7 +42,14 @@ class PlanningCalendarScreen extends StatelessWidget {
           projectName: project.name,
           isRecurring: task.recurrence != null,
           item: task,
-          onTap: () => _showCompletionDialog(context, task, project, null, null),
+          onTap: () => _showCompletionDialog(
+            context,
+            task,
+            project,
+            null,
+            null,
+            task.recurrence != null ? date : null,
+          ),
         ));
       }
     }
@@ -63,7 +72,14 @@ class PlanningCalendarScreen extends StatelessWidget {
           taskName: task.name,
           isRecurring: stage.recurrence != null,
           item: stage,
-          onTap: () => _showCompletionDialog(context, stage, project, task, null),
+          onTap: () => _showCompletionDialog(
+            context,
+            stage,
+            project,
+            task,
+            null,
+            stage.recurrence != null ? date : null,
+          ),
         ));
       }
     }
@@ -87,7 +103,14 @@ class PlanningCalendarScreen extends StatelessWidget {
           stageName: stage.name,
           isRecurring: step.recurrence != null,
           item: step,
-          onTap: () => _showCompletionDialog(context, step, project, task, stage),
+          onTap: () => _showCompletionDialog(
+            context,
+            step,
+            project,
+            task,
+            stage,
+            step.recurrence != null ? date : null,
+          ),
         ));
       }
     }
@@ -217,10 +240,20 @@ class PlanningCalendarScreen extends StatelessWidget {
                 isCompleted ? Icons.check_circle : Icons.check_circle_outline,
                 color: isCompleted ? Colors.green : Colors.grey,
               ),
-              onPressed: item.onTap,
+              onPressed: () {
+                item.onTap();
+                try {
+                  Provider.of<CalendarRefresh>(context, listen: false).refresh();
+                } catch (_) {}
+              },
               tooltip: isCompleted ? 'Снять отметку' : 'Отметить выполнение',
             ),
-            onTap: item.onTap,
+            onTap: () {
+              item.onTap();
+              try {
+                Provider.of<CalendarRefresh>(context, listen: false).refresh();
+              } catch (_) {}
+            },
           ),
         );
       },
@@ -246,6 +279,7 @@ class PlanningCalendarScreen extends StatelessWidget {
         Project? project,
         Task? task,
         Stage? stage,
+        DateTime? occurrenceDate,
       ]) {
     showDialog(
       context: context,
@@ -254,6 +288,7 @@ class PlanningCalendarScreen extends StatelessWidget {
         project: project,
         task: task,
         stage: stage,
+        occurrenceDate: occurrenceDate,
       ),
     ).then((result) {
       if (result != null) {

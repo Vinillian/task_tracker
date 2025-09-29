@@ -73,6 +73,7 @@ class MyApp extends StatelessWidget {
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
+
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
@@ -81,17 +82,28 @@ class AuthWrapper extends StatelessWidget {
       stream: authService.authStateChanges,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasData) {
-          return const TaskTrackerScreen();
-        }
+          // 🔹 Загружаем пользователя из локального хранилища
+          final localRepo = Provider.of<LocalRepository>(context, listen: false);
+          final user = localRepo.loadUser();
 
-        return const AuthScreen();
+          if (user == null) {
+            debugPrint('⚠️ Пользователь не найден в локальном хранилище');
+          } else {
+            debugPrint('✅ Загружен пользователь: ${user.username}');
+          }
+
+          return const TaskTrackerScreen();
+        } else {
+          return const AuthScreen(); // 🔹 добавляем экран авторизации
+        }
       },
     );
   }
+
 }
 
 // Простое приложение для отображения ошибки

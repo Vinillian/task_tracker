@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:provider/provider.dart';
+import '../main.dart';
 import '../models/app_user.dart';
 import '../models/task.dart';
 import '../models/stage.dart';
@@ -7,6 +9,9 @@ import '../models/step.dart' as custom_step;
 import '../widgets/detailed_completion_dialog.dart';
 import '../services/recurrence_service.dart';
 import '../services/recurrence_completion_service.dart';
+import '../repositories/local_repository.dart';
+
+
 
 class CalendarScreen extends StatefulWidget {
   final AppUser? currentUser;
@@ -25,7 +30,8 @@ class CalendarScreen extends StatefulWidget {
 class _CalendarScreenState extends State<CalendarScreen> {
   CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _focusedDay = DateTime.now();
-  DateTime? _selectedDay;
+  DateTime? _selectedDay = DateTime.now();
+
 
   /// Построение списка задач
   Future<Map<DateTime, List<Map<String, dynamic>>>> _getPlannedItems() async {
@@ -75,6 +81,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               'name': task.name,
               'isRecurring': false,
               'isCompleted': task.isCompleted,
+              'taskType': task.taskType,
             });
           }
         }
@@ -190,19 +197,51 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return isSameDay(occurrenceDate, DateTime(today.year, today.month, today.day)) && step.isCompleted;
   }
 
+
   Future<void> _handleItemCompletion(Map<String, dynamic> completionResult) async {
     final item = completionResult['item'];
     final occurrenceDate = completionResult['occurrenceDate'] as DateTime?;
     final isRecurring = completionResult['isRecurring'] == true;
 
-    if (isRecurring && occurrenceDate != null && item is Task) {
-      if (await RecurrenceCompletionService.isOccurrenceCompleted(item, occurrenceDate, context)) {
-        await RecurrenceCompletionService.unmarkOccurrenceCompleted(item, occurrenceDate, context);
+    if (item is Task) {
+      if (isRecurring && occurrenceDate != null) {
+        // Повторяющаяся задача
+        if (await RecurrenceCompletionService.isOccurrenceCompleted(item, occurrenceDate, context)) {
+          await RecurrenceCompletionService.unmarkOccurrenceCompleted(item, occurrenceDate, context);
+        } else {
+          await RecurrenceCompletionService.markOccurrenceCompleted(item, occurrenceDate, context);
+        }
       } else {
-        await RecurrenceCompletionService.markOccurrenceCompleted(item, occurrenceDate, context);
+        // 🔹 НЕ повторяющаяся задача (singleStep или stepByStep)
+        final updatedTask = item.copyWith(isCompleted: !item.isCompleted);
+        // теперь нужно заменить задачу в проекте на обновлённую
+        final project = completionResult['project'];
+        final index = project.tasks.indexWhere((t) => t.id == item.id);
+        if (index != -1) {
+          project.tasks[index] = updatedTask;
+        }
+
       }
     }
+
+    // Сохраняем пользователя после изменений
+    try {
+      final localRepo = Provider.of<LocalRepository>(context, listen: false);
+      final currentUser = localRepo.loadUser();
+      if (currentUser != null) {
+        await localRepo.saveUser(currentUser);
+      }
+    } catch (e) {
+      debugPrint('❌ Ошибка сохранения после отметки: $e');
+    }
+
     widget.onItemCompleted(completionResult);
+
+    // Обновляем UI
+    setState(() {});
+    try {
+      Provider.of<CalendarRefresh>(context, listen: false).refresh();
+    } catch (_) {}
   }
 
   @override
@@ -310,7 +349,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     ).then((result) {
       if (result != null) {
         _handleItemCompletion(result);
-        widget.onItemCompleted(result);
       }
     });
   }
