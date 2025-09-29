@@ -15,7 +15,8 @@ import '../models/step.dart' as custom_step;
 import '../services/completion_service.dart';
 import 'calendar_screen.dart';
 import '../widgets/task_heatmap_widget.dart';
-import '../services/recurrence_completion_service.dart'; // ← ДОБАВЬТЕ ЭТУ СТРОЧКУ
+import '../services/recurrence_completion_service.dart';
+
 
 
 class TaskTrackerScreen extends StatefulWidget {
@@ -30,41 +31,34 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
   AppUser? currentUser;
   final FirestoreService _firestoreService = FirestoreService();
 
-  // TabController делаем доступным для Drawer
   TabController get tabController => _tabControllerInternal;
   late TabController _tabControllerInternal;
 
   String? _saveMessage;
-  final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
+  final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
+  GlobalKey<RefreshIndicatorState>();
 
   @override
   void initState() {
     super.initState();
     _tabControllerInternal = TabController(length: 4, vsync: this);
     _initializeData().then((_) {
-      _fixMissingPlannedDates(); // ← ДОБАВЬТЕ ЭТУ СТРОЧКУ
+      _fixMissingPlannedDates();
     });
   }
 
   Future<void> _initializeData() async {
-    // Даем время на инициализацию Hive
     await Future.delayed(const Duration(milliseconds: 500));
-
-    // Сначала пробуем загрузить данные
     await _loadUserData();
 
-    // Затем проверяем и восстанавливаем данные если нужно
     final localRepo = Provider.of<LocalRepository>(context, listen: false);
     final recovered = await localRepo.checkAndRecoverData();
     if (recovered) {
       print('✅ Данные восстановлены');
-      await _loadUserData(); // Перезагружаем данные
+      await _loadUserData();
     }
   }
 
-
-
-  // Метод обновления данных
   Future<void> _refreshData() async {
     print('🔄 Принудительное обновление данных...');
     setState(() {
@@ -73,38 +67,32 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     await _loadUserData();
   }
 
-
   Future<void> _loadUserData() async {
     print('📥 Загрузка данных пользователя...');
     final localRepo = Provider.of<LocalRepository>(context, listen: false);
 
     try {
-      // ПЕРВОЕ: Пробуем загрузить из Hive
       final localUser = localRepo.loadUser();
       if (localUser != null && localUser.username.isNotEmpty) {
         print('✅ Используем локальные данные из Hive');
-        print('📊 Проектов: ${localUser.projects.length}, История: ${localUser.progressHistory.length}');
-
         if (mounted) {
           setState(() => currentUser = localUser);
         }
         return;
       }
 
-      // ВТОРОЕ: Если в Hive пусто, пробуем Firestore
       final authService = Provider.of<AuthService>(context, listen: false);
       final currentAuthUser = authService.currentUser;
 
       if (currentAuthUser != null) {
         try {
           print('🔍 Загрузка данных пользователя из Firestore...');
-          final userDoc = await _firestoreService.getUserDocument(currentAuthUser.uid);
+          final userDoc =
+          await _firestoreService.getUserDocument(currentAuthUser.uid);
 
           if (userDoc.exists) {
             final userData = userDoc.data() as Map<String, dynamic>;
             final firestoreUser = AppUser.fromFirestore(userData);
-
-            print('✅ Данные из Firestore: ${firestoreUser.projects.length} проектов');
 
             if (mounted) {
               setState(() {
@@ -112,12 +100,9 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
               });
             }
 
-            // Сохраняем в Hive для будущих загрузок
             await localRepo.saveUser(firestoreUser);
             print('✅ Данные сохранены в Hive');
           } else {
-            print('ℹ️ Документ пользователя не существует в Firestore');
-            // Создаем пустого пользователя
             if (mounted) {
               setState(() {
                 currentUser = AppUser.empty();
@@ -126,7 +111,6 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
           }
         } catch (e) {
           print('❌ Ошибка загрузки пользователя: $e');
-          // Создаем пустого пользователя как запасной вариант
           if (mounted) {
             setState(() {
               currentUser = AppUser.empty();
@@ -138,7 +122,6 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
       }
     } catch (e) {
       print('❌ Неожиданная ошибка в _loadUserData: $e');
-      // Создаем пустого пользователя как запасной вариант
       if (mounted) {
         setState(() {
           currentUser = AppUser.empty();
@@ -147,20 +130,24 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     }
   }
 
-  // В lib/screens/project_list_screen.dart
-  int _calculateRealCompletedTasks(Project project) {
+  /// Подсчёт завершённых задач в проекте
+  Future<int> _calculateRealCompletedTasks(
+      Project project, BuildContext context) async {
     int completed = 0;
     final today = DateTime.now();
 
     for (var task in project.tasks) {
       if (task.recurrence != null) {
-        // Для recurring задач проверяем выполнение на сегодня
-        if (RecurrenceCompletionService.isOccurrenceCompleted(task, today)) {
-          completed++;
-        }
+        final done = await RecurrenceCompletionService.isOccurrenceCompleted(
+          task,
+          today,
+          context,
+        );
+        if (done) completed++;
       } else if (task.taskType == "singleStep" && task.isCompleted) {
         completed++;
-      } else if (task.taskType == "stepByStep" && task.completedSteps >= task.totalSteps) {
+      } else if (task.taskType == "stepByStep" &&
+          task.completedSteps >= task.totalSteps) {
         completed++;
       }
     }
@@ -168,7 +155,6 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     return completed;
   }
 
-  // Метод для обработки завершения задач из экрана планирования
   void _handleItemCompletion(Map<String, dynamic> completionResult) {
     if (completionResult['item'] == null || currentUser == null) return;
 
@@ -181,21 +167,16 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
 
     print('🎯 Обработка выполнения: ${completedItem.name}, recurring: $isRecurring');
 
-    // Для recurring задач - только история, без изменения оригинала
     if (isRecurring && occurrenceDate != null) {
       _handleRecurringItemCompletion(completedItem, project, task, stage);
       return;
     }
 
-    // Для обычных задач - полная обработка
     _handleRegularItemCompletion(completedItem, project, task, stage);
   }
 
-// НОВЫЙ МЕТОД: Обработка recurring задач
-  void _handleRecurringItemCompletion(dynamic completedItem, Project? project, Task? task, Stage? stage) {
-    print('🔄 Обработка RECURRING задачи: ${completedItem.name}');
-
-    // Создаем запись в истории прогресса
+  void _handleRecurringItemCompletion(
+      dynamic completedItem, Project? project, Task? task, Stage? stage) {
     final progressHistory = ProgressHistory(
       date: DateTime.now(),
       itemName: completedItem.name,
@@ -203,7 +184,6 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
       itemType: _getItemType(completedItem),
     );
 
-    // Обновляем только историю, не меняем сами задачи
     final updatedHistory = List<dynamic>.from(currentUser!.progressHistory)
       ..add(progressHistory);
 
@@ -211,19 +191,16 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
       currentUser = AppUser(
         username: currentUser!.username,
         email: currentUser!.email,
-        projects: currentUser!.projects, // Не меняем проекты для recurring задач
+        projects: currentUser!.projects,
         progressHistory: updatedHistory,
       );
     });
 
-    _saveCurrentUser(); // ← СОХРАНЯЕМ И В HIVE И В FIRESTORE
-    print('✅ Recurring задача "${completedItem.name}" добавлена в историю');
+    _saveCurrentUser();
   }
 
-// НОВЫЙ МЕТОД: Обработка обычных задач
-  void _handleRegularItemCompletion(dynamic completedItem, Project? project, Task? task, Stage? stage) {
-    print('📝 Обработка ОБЫЧНОЙ задачи: ${completedItem.name}');
-
+  void _handleRegularItemCompletion(
+      dynamic completedItem, Project? project, Task? task, Stage? stage) {
     final result = CompletionService.completeItemWithHistory(
       item: completedItem,
       stepsAdded: 1,
@@ -232,14 +209,13 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
       currentHistory: currentUser!.progressHistory,
     );
 
-    // Обновляем проекты с правильной логикой
     final updatedProjects = _updateProjectsWithCompletion(
-        currentUser!.projects,
-        completedItem,
-        project,
-        task,
-        stage,
-        result['updatedItem']
+      currentUser!.projects,
+      completedItem,
+      project,
+      task,
+      stage,
+      result['updatedItem'],
     );
 
     setState(() {
@@ -254,7 +230,6 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     _saveCurrentUser();
   }
 
-// Вспомогательный метод для определения типа элемента
   String _getItemType(dynamic item) {
     if (item is Task) return 'task';
     if (item is Stage) return 'stage';
@@ -262,11 +237,6 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     return 'unknown';
   }
 
-
-
-
-
-  // Метод для сохранения текущего пользователя в Firestore
   void _saveCurrentUser() {
     if (currentUser == null) return;
 
@@ -274,19 +244,6 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     final currentAuthUser = authService.currentUser;
 
     if (currentAuthUser == null) return;
-
-    // Если данные пустые, заполняем их из аутентификации
-    if (currentUser!.username.isEmpty || currentUser!.email.isEmpty) {
-      print('⚠️ Заполняем пустые данные пользователя из аутентификации');
-      setState(() {
-        currentUser = AppUser(
-          username: currentAuthUser.email?.split('@').first ?? 'User',
-          email: currentAuthUser.email ?? '',
-          projects: currentUser?.projects ?? [],
-          progressHistory: currentUser?.progressHistory ?? [],
-        );
-      });
-    }
 
     final localRepo = Provider.of<LocalRepository>(context, listen: false);
 
@@ -302,8 +259,6 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
       _saveMessage = 'Сохранение...';
     });
 
-    print('💾 Сохранение пользователя в Firestore: ${currentUser!.username}');
-
     _firestoreService.saveUser(currentUser!, currentAuthUser.uid).then((_) {
       setState(() {
         _saveMessage = 'Данные сохранены ✅';
@@ -313,12 +268,10 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
           _saveMessage = null;
         });
       });
-      print('✅ Данные успешно сохранены в Firestore');
     }).catchError((error) {
       setState(() {
         _saveMessage = 'Ошибка сохранения: $error';
       });
-      print('❌ Ошибка сохранения в Firestore: $error');
     });
   }
 
@@ -388,15 +341,14 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     _saveCurrentUser();
   }
 
-  // Метод для обработки завершения задач из экрана планирования
-  void _handleItemCompletionFromPlanning(Map<String, dynamic> completionResult) {
+  void _handleItemCompletionFromPlanning(
+      Map<String, dynamic> completionResult) {
     _handleItemCompletion(completionResult);
 
-    // Показываем уведомление
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+      const SnackBar(
         content: Text('✅ Задача выполнена!'),
-        duration: const Duration(seconds: 2),
+        duration: Duration(seconds: 2),
       ),
     );
   }
@@ -407,7 +359,9 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(currentUser?.username ?? authService.currentUser?.email ?? '📊 Трекер задач'),
+        title: Text(currentUser?.username ??
+            authService.currentUser?.email ??
+            '📊 Трекер задач'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         bottom: TabBar(
@@ -431,19 +385,27 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
           if (_saveMessage != null)
             Container(
               padding: const EdgeInsets.all(8),
-              color: _saveMessage!.contains('Ошибка') ? Colors.red[100] : Colors.green[100],
+              color: _saveMessage!.contains('Ошибка')
+                  ? Colors.red[100]
+                  : Colors.green[100],
               child: Row(
                 children: [
                   Icon(
-                    _saveMessage!.contains('Ошибка') ? Icons.error : Icons.check_circle,
-                    color: _saveMessage!.contains('Ошибка') ? Colors.red : Colors.green,
+                    _saveMessage!.contains('Ошибка')
+                        ? Icons.error
+                        : Icons.check_circle,
+                    color: _saveMessage!.contains('Ошибка')
+                        ? Colors.red
+                        : Colors.green,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _saveMessage!,
                       style: TextStyle(
-                        color: _saveMessage!.contains('Ошибка') ? Colors.red : Colors.green,
+                        color: _saveMessage!.contains('Ошибка')
+                            ? Colors.red
+                            : Colors.green,
                       ),
                     ),
                   ),
@@ -469,15 +431,13 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
                     onAddProgressHistory: _addProgressHistory,
                   )
                       : const Center(child: CircularProgressIndicator()),
-
                   currentUser != null
-                      ? StatisticsWidgets.buildStatisticsTab(context, currentUser)
+                      ? StatisticsWidgets.buildStatisticsTab(
+                      context, currentUser)
                       : const Center(child: CircularProgressIndicator()),
-
                   currentUser != null
                       ? TaskHeatmapWidget(currentUser: currentUser)
                       : const Center(child: CircularProgressIndicator()),
-
                   currentUser != null
                       ? CalendarScreen(
                     currentUser: currentUser,
@@ -505,29 +465,25 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     super.dispose();
   }
 
-  // НОВЫЙ МЕТОД: Правильное обновление проектов
   List<Project> _updateProjectsWithCompletion(
       List<Project> projects,
       dynamic completedItem,
       Project? targetProject,
       Task? targetTask,
       Stage? targetStage,
-      dynamic updatedItem
+      dynamic updatedItem,
       ) {
     return projects.map((project) {
-      // Если это не целевой проект, возвращаем без изменений
       if (targetProject != null && project.name != targetProject.name) {
         return project;
       }
 
-      // Обновляем задачи в проекте
       final updatedTasks = project.tasks.map((task) {
-        // Если это целевая задача
         if (targetTask != null && task.name == targetTask.name) {
-          return _updateTaskWithCompletion(task, completedItem, targetStage, updatedItem);
+          return _updateTaskWithCompletion(
+              task, completedItem, targetStage, updatedItem);
         }
 
-        // Если completedItem - это сама задача
         if (completedItem is Task && task.name == completedItem.name) {
           return updatedItem;
         }
@@ -539,9 +495,15 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     }).toList();
   }
 
-// Вспомогательный метод: обновление задачи
-  Task _updateTaskWithCompletion(Task task, dynamic completedItem, Stage? targetStage, dynamic updatedItem) {
-    // Если completedItem - это этап
+
+// исправленный фрагмент без copyWith
+
+  Task _updateTaskWithCompletion(
+      Task task,
+      dynamic completedItem,
+      Stage? targetStage,
+      dynamic updatedItem,
+      ) {
     if (completedItem is Stage && targetStage != null) {
       final updatedStages = task.stages.map((stage) {
         if (stage.name == targetStage.name) {
@@ -566,7 +528,6 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
       );
     }
 
-    // Если completedItem - это шаг
     if (completedItem is custom_step.Step && targetStage != null) {
       final updatedStages = task.stages.map((stage) {
         if (stage.name == targetStage.name) {
@@ -583,7 +544,7 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
             totalSteps: stage.totalSteps,
             stageType: stage.stageType,
             isCompleted: stage.isCompleted,
-            steps: updatedSteps.cast<custom_step.Step>(), // ← ДОБАВЬТЕ .cast<custom_step.Step>()
+            steps: updatedSteps.cast<custom_step.Step>(),
             plannedDate: stage.plannedDate,
             recurrence: stage.recurrence,
           );
@@ -610,9 +571,11 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     return task;
   }
 
-// Вспомогательный метод: обновление этапа
-  Stage _updateStageWithCompletion(Stage stage, dynamic completedItem, dynamic updatedItem) {
-    // Если completedItem - это шаг
+  Stage _updateStageWithCompletion(
+      Stage stage,
+      dynamic completedItem,
+      dynamic updatedItem,
+      ) {
     if (completedItem is custom_step.Step) {
       final updatedSteps = stage.steps.map((step) {
         if (step.name == completedItem.name) {
@@ -627,24 +590,21 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
         totalSteps: stage.totalSteps,
         stageType: stage.stageType,
         isCompleted: stage.isCompleted,
-        steps: updatedSteps.cast<custom_step.Step>(), // ← ДОБАВЬТЕ .cast<custom_step.Step>()
+        steps: updatedSteps.cast<custom_step.Step>(),
         plannedDate: stage.plannedDate,
         recurrence: stage.recurrence,
       );
     }
 
-    // Если completedItem - это сам этап
     return updatedItem;
   }
 
-  // В _TaskTrackerScreenState добавьте метод:
   void _fixMissingPlannedDates() {
     if (currentUser == null) return;
 
     bool needsFix = false;
     final updatedProjects = currentUser!.projects.map((project) {
       final updatedTasks = project.tasks.map((task) {
-        // Если задача recurring но plannedDate = null - восстанавливаем
         if (task.recurrence != null && task.plannedDate == null) {
           needsFix = true;
           return Task(
@@ -657,7 +617,7 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
             dueDate: task.dueDate,
             isCompleted: task.isCompleted,
             description: task.description,
-            plannedDate: DateTime.now(), // Устанавливаем сегодняшнюю дату
+            plannedDate: DateTime.now(),
             colorValue: task.colorValue,
             isTracked: task.isTracked,
           );
@@ -682,3 +642,4 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     }
   }
 }
+

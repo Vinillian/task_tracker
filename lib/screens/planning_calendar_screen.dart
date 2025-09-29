@@ -167,65 +167,63 @@ class PlanningCalendarScreen extends StatelessWidget {
   }
 
   Widget _buildPlannedItem(BuildContext context, _PlannedItem item) {
-    bool isCompleted = false;
-
-    if (item.isRecurring && item.item is Task) {
-      isCompleted = RecurrenceCompletionService.isOccurrenceCompleted(
-        item.item as Task,
-        item.date,
-      );
-    } else {
-      if (item.item is Task) {
-        isCompleted = (item.item as Task).isCompleted;
-      } else if (item.item is Stage) {
-        isCompleted = (item.item as Stage).isCompleted;
-      } else if (item.item is custom_step.Step) {
-        isCompleted = (item.item as custom_step.Step).isCompleted;
-      }
-    }
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: ListTile(
-        leading: _getIconForType(item.type),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                item.name,
-                style: TextStyle(
-                  decoration: isCompleted ? TextDecoration.lineThrough : TextDecoration.none,
-                ),
-              ),
-            ),
-            if (item.isRecurring)
-              const Icon(Icons.repeat, size: 16, color: Colors.blue),
-          ],
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${item.type} • ${item.projectName}'),
-            if (item.taskName != null) Text('Задача: ${item.taskName}'),
-            if (item.stageName != null) Text('Этап: ${item.stageName}'),
-            Text('На: ${DateFormat('HH:mm').format(item.date)}'),
-            if (item.isRecurring)
-              Text(
-                isCompleted ? '✅ Выполнено' : '⏳ Ожидает',
-                style: TextStyle(color: isCompleted ? Colors.green : Colors.orange),
-              ),
-          ],
-        ),
-        trailing: IconButton(
-          icon: Icon(
-            isCompleted ? Icons.check_circle : Icons.check_circle_outline,
-            color: isCompleted ? Colors.green : Colors.grey,
-          ),
-          onPressed: item.onTap,
-          tooltip: isCompleted ? 'Снять отметку' : 'Отметить выполнение',
-        ),
-        onTap: item.onTap,
+    return FutureBuilder<bool>(
+      future: item.isRecurring && item.item is Task
+          ? RecurrenceCompletionService.isOccurrenceCompleted(item.item as Task, item.date, context)
+          : Future.value(
+        item.item is Task
+            ? (item.item as Task).isCompleted
+            : item.item is Stage
+            ? (item.item as Stage).isCompleted
+            : (item.item as custom_step.Step).isCompleted,
       ),
+      builder: (context, snapshot) {
+        final isCompleted = snapshot.data ?? false;
+
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: ListTile(
+            leading: _getIconForType(item.type),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    item.name,
+                    style: TextStyle(
+                      decoration: isCompleted ? TextDecoration.lineThrough : TextDecoration.none,
+                    ),
+                  ),
+                ),
+                if (item.isRecurring)
+                  const Icon(Icons.repeat, size: 16, color: Colors.blue),
+              ],
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${item.type} • ${item.projectName}'),
+                if (item.taskName != null) Text('Задача: ${item.taskName}'),
+                if (item.stageName != null) Text('Этап: ${item.stageName}'),
+                Text('На: ${DateFormat('HH:mm').format(item.date)}'),
+                if (item.isRecurring)
+                  Text(
+                    isCompleted ? '✅ Выполнено' : '⏳ Ожидает',
+                    style: TextStyle(color: isCompleted ? Colors.green : Colors.orange),
+                  ),
+              ],
+            ),
+            trailing: IconButton(
+              icon: Icon(
+                isCompleted ? Icons.check_circle : Icons.check_circle_outline,
+                color: isCompleted ? Colors.green : Colors.grey,
+              ),
+              onPressed: item.onTap,
+              tooltip: isCompleted ? 'Снять отметку' : 'Отметить выполнение',
+            ),
+            onTap: item.onTap,
+          ),
+        );
+      },
     );
   }
 
@@ -288,3 +286,4 @@ class _PlannedItem {
     required this.onTap,
   });
 }
+
