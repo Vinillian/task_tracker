@@ -1,161 +1,239 @@
+// screens/project_detail_screen.dart
 import 'package:flutter/material.dart';
 import '../models/project.dart';
 import '../models/task.dart';
-import '../services/task_service.dart';
-import '../services/completion_service.dart';
-import '../widgets/task_list_item.dart';
-import '../widgets/task_edit_dialog.dart';
+import '../models/task_type.dart';
+import '../widgets/task_card.dart';
+import '../widgets/add_task_dialog.dart';
+import '../widgets/edit_dialogs.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final Project project;
+  final int projectIndex;
+  final Function(Project) onProjectUpdated;
 
-  const ProjectDetailScreen({Key? key, required this.project}) : super(key: key);
+  const ProjectDetailScreen({
+    super.key,
+    required this.project,
+    required this.projectIndex,
+    required this.onProjectUpdated,
+  });
 
   @override
-  _ProjectDetailScreenState createState() => _ProjectDetailScreenState();
+  State<ProjectDetailScreen> createState() => _ProjectDetailScreenState();
 }
 
 class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   late Project _project;
-  late TaskService _taskService;
-  late CompletionService _completionService;
-
-  final List<Task> _selectedTasks = [];
-  bool _selectionMode = false;
 
   @override
   void initState() {
     super.initState();
     _project = widget.project;
-    _completionService = CompletionService();
-    _taskService = TaskService(_completionService);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: _buildAppBar(),
-      body: _buildBody(),
-      floatingActionButton: _buildFloatingActionButton(),
-    );
-  }
-
-  AppBar _buildAppBar() {
-    return AppBar(
-      title: Text(_project.name),
-      actions: [
-        if (_project.tasks.isNotEmpty) ...[
-          IconButton(
-            icon: Icon(_selectionMode ? Icons.cancel : Icons.select_all),
-            onPressed: _toggleSelectionMode,
-            tooltip: _selectionMode ? 'Отменить выбор' : 'Выбрать задачи',
-          ),
-          if (_selectionMode && _selectedTasks.isNotEmpty)
-            IconButton(
-              icon: Icon(Icons.delete),
-              onPressed: _deleteSelectedTasks,
-              tooltip: 'Удалить выбранные',
-            ),
-        ],
-        PopupMenuButton<String>(
-          onSelected: (value) {
-            _handleMenuAction(value);
-          },
-          itemBuilder: (BuildContext context) => [
-            PopupMenuItem(
-              value: 'add_task',
-              child: Row(
-                children: [
-                  Icon(Icons.add, color: Colors.green),
-                  SizedBox(width: 8),
-                  Text('Добавить задачу'),
-                ],
-              ),
-            ),
-            PopupMenuItem(
-              value: 'project_stats',
-              child: Row(
-                children: [
-                  Icon(Icons.analytics, color: Colors.blue),
-                  SizedBox(width: 8),
-                  Text('Статистика проекта'),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBody() {
-    if (_project.tasks.isEmpty) {
-      return _buildEmptyState();
-    }
-
-    return Column(
-      children: [
-        // Прогресс проекта
-        _buildProjectProgress(),
-        // Список задач
-        Expanded(
-          child: _buildTaskList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.task, size: 64, color: Colors.grey.shade300),
-          SizedBox(height: 16),
-          Text(
-            'Пока нет задач',
-            style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Добавьте первую задачу в проект',
-            style: TextStyle(color: Colors.grey.shade500),
-          ),
-        ],
+  void _addTask() {
+    showDialog(
+      context: context,
+      builder: (context) => AddTaskDialog(
+        onTaskCreated: (String title, String description, TaskType type, int steps) {
+          _createTask(title, description, type, steps);
+        },
       ),
     );
   }
 
-  Widget _buildProjectProgress() {
-    final progress = _project.progress;
+  void _createTask(String title, String description, TaskType type, int totalSteps) {
+    setState(() {
+      final newTask = Task(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: title,
+        description: description,
+        isCompleted: false,
+        type: type,
+        totalSteps: totalSteps,
+        completedSteps: 0,
+      );
+
+      _project = _project.copyWith(
+        tasks: [..._project.tasks, newTask],
+      );
+    });
+
+    widget.onProjectUpdated(_project);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Задача "$title" добавлена!'),
+        backgroundColor: Colors.blue,
+      ),
+    );
+  }
+
+  void _toggleTask(int taskIndex) {
+    setState(() {
+      final task = _project.tasks[taskIndex];
+      final updatedTask = task.copyWith(isCompleted: !task.isCompleted);
+      final updatedTasks = List<Task>.from(_project.tasks);
+      updatedTasks[taskIndex] = updatedTask;
+
+      _project = _project.copyWith(tasks: updatedTasks);
+    });
+
+    widget.onProjectUpdated(_project);
+  }
+
+  void _updateTaskSteps(int taskIndex, int newCompletedSteps) {
+    setState(() {
+      final updatedTasks = List<Task>.from(_project.tasks);
+      updatedTasks[taskIndex] = updatedTasks[taskIndex].copyWith(
+        completedSteps: newCompletedSteps,
+      );
+
+      _project = _project.copyWith(tasks: updatedTasks);
+    });
+
+    widget.onProjectUpdated(_project);
+  }
+
+  void _editTask(int taskIndex) {
+    showDialog(
+      context: context,
+      builder: (context) => EditTaskDialog(
+        task: _project.tasks[taskIndex],
+        onTaskUpdated: (String title, String description) {
+          _updateTask(taskIndex, title, description);
+        },
+      ),
+    );
+  }
+
+  void _updateTask(int taskIndex, String title, String description) {
+    setState(() {
+      final updatedTasks = List<Task>.from(_project.tasks);
+      updatedTasks[taskIndex] = updatedTasks[taskIndex].copyWith(
+        title: title,
+        description: description,
+      );
+
+      _project = _project.copyWith(tasks: updatedTasks);
+    });
+
+    widget.onProjectUpdated(_project);
+  }
+
+  void _deleteTask(int taskIndex) {
+    setState(() {
+      final updatedTasks = List<Task>.from(_project.tasks)..removeAt(taskIndex);
+      _project = _project.copyWith(tasks: updatedTasks);
+    });
+
+    widget.onProjectUpdated(_project);
+  }
+
+  void _updateTaskWithSubTasks(int taskIndex, Task updatedTask) {
+    setState(() {
+      final updatedTasks = List<Task>.from(_project.tasks);
+      updatedTasks[taskIndex] = updatedTask;
+      _project = _project.copyWith(tasks: updatedTasks);
+    });
+
+    widget.onProjectUpdated(_project);
+  }
+
+  void _editProject() {
+    showDialog(
+      context: context,
+      builder: (context) => EditProjectDialog(
+        project: _project,
+        onProjectUpdated: (String name, String description) {
+          setState(() {
+            _project = _project.copyWith(
+              name: name,
+              description: description,
+            );
+          });
+          widget.onProjectUpdated(_project);
+        },
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
     return Card(
-      margin: EdgeInsets.all(16),
+      margin: const EdgeInsets.all(16),
       child: Padding(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Прогресс проекта',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            Row(
+              children: [
+                const Icon(Icons.folder, color: Colors.blue, size: 32),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _project.name,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.orange),
+                  onPressed: _editProject,
+                  tooltip: 'Редактировать проект',
+                ),
+              ],
             ),
-            SizedBox(height: 8),
-            LinearProgressIndicator(
-              value: progress,
-              backgroundColor: Colors.grey.shade200,
-              color: _getProgressColor(progress),
+            const SizedBox(height: 8),
+            if (_project.description.isNotEmpty) ...[
+              Text(
+                _project.description,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: LinearProgressIndicator(
+                    value: _project.progress,
+                    backgroundColor: Colors.grey.shade200,
+                    color: _project.progress == 1.0 ? Colors.green : Colors.blue,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${(_project.progress * 100).toInt()}%',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
-            SizedBox(height: 4),
+            const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${(progress * 100).toStringAsFixed(1)}%',
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                  '${_project.completedTasks}/${_project.totalTasks} задач выполнено',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                  ),
                 ),
                 Text(
-                  '${_project.allTasks.where((t) => t.isCompleted).length}/${_project.allTasks.length} задач',
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                  'Создан: ${_project.createdAt.day}.${_project.createdAt.month}.${_project.createdAt.year}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade500,
+                  ),
                 ),
               ],
             ),
@@ -165,248 +243,91 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  Widget _buildTaskList() {
-    return ListView.builder(
-      padding: EdgeInsets.all(8),
-      itemCount: _project.tasks.length,
-      itemBuilder: (context, index) {
-        final task = _project.tasks[index];
-        return _buildTaskWithSubtasks(task);
-      },
-    );
-  }
-
-  Widget _buildTaskWithSubtasks(Task task) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Основная задача
-        TaskListItem(
-          task: task,
-          nestingLevel: task.nestingLevel,
-          onTap: () => _selectionMode
-              ? _toggleTaskSelection(task)
-              : _showTaskDetails(task),
-          onComplete: () => _toggleTaskCompletion(task),
-          onAddSubtask: task.canAddSubtask()
-              ? () => _showAddSubtaskDialog(task)
-              : null,
-          onEdit: () => _showEditTaskDialog(task),
-          onDelete: () => _deleteTask(task),
-          isSelected: _selectedTasks.contains(task),
+  Widget _buildTasksList() {
+    if (_project.tasks.isEmpty) {
+      return const Expanded(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.task, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
+              Text(
+                'Нет задач',
+                style: TextStyle(fontSize: 18, color: Colors.grey),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Добавьте первую задачу',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
         ),
-        // Рекурсивно отображаем подзадачи
-        ...task.subtasks.map((subtask) => _buildTaskWithSubtasks(subtask)),
-      ],
-    );
-  }
-
-  Widget _buildFloatingActionButton() {
-    if (_selectionMode) return SizedBox.shrink();
-
-    return FloatingActionButton(
-      onPressed: _showAddTaskDialog,
-      child: Icon(Icons.add),
-      tooltip: 'Добавить задачу',
-    );
-  }
-
-  // === ОБРАБОТЧИКИ СОБЫТИЙ ===
-
-  void _toggleSelectionMode() {
-    setState(() {
-      _selectionMode = !_selectionMode;
-      if (!_selectionMode) {
-        _selectedTasks.clear();
-      }
-    });
-  }
-
-  void _toggleTaskSelection(Task task) {
-    setState(() {
-      if (_selectedTasks.contains(task)) {
-        _selectedTasks.remove(task);
-      } else {
-        _selectedTasks.add(task);
-      }
-    });
-  }
-
-  void _deleteSelectedTasks() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Удалить выбранные задачи?'),
-        content: Text('Будет удалено ${_selectedTasks.length} задач${_selectedTasks.any((t) => t.hasSubtasks) ? ' вместе с подзадачами' : ''}.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _performDeleteSelectedTasks();
-            },
-            child: Text('Удалить', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _performDeleteSelectedTasks() {
-    setState(() {
-      for (final task in _selectedTasks) {
-        _project = _project.removeTask(task.id);
-      }
-      _selectedTasks.clear();
-      _selectionMode = false;
-    });
-    // TODO: Сохранить изменения в репозитории
-  }
-
-  void _showAddTaskDialog() async {
-    final result = await showDialog<Task>(
-      context: context,
-      builder: (context) => TaskEditDialog(
-        projectId: _project.id,
-        nestingLevel: 0,
-      ),
-    );
-
-    if (result != null) {
-      setState(() {
-        _project = _project.addTask(result);
-      });
-      // TODO: Сохранить изменения в репозитории
+      );
     }
-  }
 
-  void _showAddSubtaskDialog(Task parentTask) async {
-    final result = await showDialog<Task>(
-      context: context,
-      builder: (context) => TaskEditDialog(
-        projectId: _project.id,
-        parentTask: parentTask,
-        nestingLevel: parentTask.nestingLevel + 1,
-      ),
-    );
-
-    if (result != null) {
-      setState(() {
-        final updatedParentTask = parentTask.addSubtask(result);
-        _project = _project.updateTask(parentTask.id, updatedParentTask);
-      });
-      // TODO: Сохранить изменения в репозитории
-    }
-  }
-
-  void _showEditTaskDialog(Task task) async {
-    final result = await showDialog<Task>(
-      context: context,
-      builder: (context) => TaskEditDialog(
-        projectId: _project.id,
-        task: task,
-        nestingLevel: task.nestingLevel,
-      ),
-    );
-
-    if (result != null) {
-      setState(() {
-        _project = _project.updateTask(task.id, result);
-      });
-      // TODO: Сохранить изменения в репозитории
-    }
-  }
-
-  void _toggleTaskCompletion(Task task) {
-    setState(() {
-      final updatedTask = task.isCompleted
-          ? _taskService.uncompleteTask(task)
-          : _taskService.completeTask(task);
-
-      _project = _project.updateTask(task.id, updatedTask);
-    });
-    // TODO: Сохранить изменения в репозитории
-  }
-
-  void _showTaskDetails(Task task) {
-    // TODO: Реализовать экран деталей задачи
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Детали задачи: ${task.title}')),
-    );
-  }
-
-  void _deleteTask(Task task) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Удалить задачу?'),
-        content: Text('Задача "${task.title}" будет удалена${task.hasSubtasks ? ' вместе со всеми подзадачами' : ''}.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() {
-                _project = _project.removeTask(task.id);
-              });
-              // TODO: Сохранить изменения в репозитории
-            },
-            child: Text('Удалить', style: TextStyle(color: Colors.red)),
-          ),
-        ],
+    return Expanded(
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _project.tasks.length,
+        itemBuilder: (context, index) {
+          return TaskCard(
+            task: _project.tasks[index],
+            taskIndex: index,
+            onToggle: () => _toggleTask(index),
+            onEdit: () => _editTask(index),
+            onDelete: () => _deleteTask(index),
+            onUpdateSteps: (newSteps) => _updateTaskSteps(index, newSteps),
+            onTaskUpdated: (updatedTask) => _updateTaskWithSubTasks(index, updatedTask),
+          );
+        },
       ),
     );
   }
 
-  void _handleMenuAction(String value) {
-    switch (value) {
-      case 'add_task':
-        _showAddTaskDialog();
-        break;
-      case 'project_stats':
-        _showProjectStats();
-        break;
-    }
-  }
-
-  void _showProjectStats() {
-    final allTasks = _project.allTasks;
-    final completedTasks = allTasks.where((t) => t.isCompleted).length;
-    final tasksWithSubtasks = allTasks.where((t) => t.hasSubtasks).length;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Статистика проекта'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Всего задач: ${allTasks.length}'),
-            Text('Выполнено: $completedTasks'),
-            Text('С подзадачами: $tasksWithSubtasks'),
-            Text('Прогресс: ${(_project.progress * 100).toStringAsFixed(1)}%'),
-          ],
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_project.name),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Закрыть'),
+          IconButton(
+            icon: const Icon(Icons.add_task),
+            onPressed: _addTask,
+            tooltip: 'Добавить задачу',
           ),
         ],
       ),
+      body: Column(
+        children: [
+          _buildHeader(),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Text(
+                  'Задачи проекта',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildTasksList(),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _addTask,
+        child: const Icon(Icons.add),
+      ),
     );
-  }
-
-  Color _getProgressColor(double progress) {
-    if (progress < 0.3) return Colors.red;
-    if (progress < 0.7) return Colors.orange;
-    return Colors.green;
   }
 }

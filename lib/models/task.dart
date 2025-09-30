@@ -1,52 +1,69 @@
-// lib/models/task.dart
+// models/task.dart
+import 'task_type.dart';
+
 class Task {
   final String id;
   final String title;
   final String description;
   final bool isCompleted;
-  final int priority;
-  final DateTime? dueDate;
-  final String? parentTaskId;
   final List<Task> subTasks;
-  final DateTime createdAt;
-  final DateTime updatedAt;
+  final TaskType type;
+  final int totalSteps;
+  final int completedSteps;
+  final int maxDepth;
 
   Task({
     required this.id,
     required this.title,
     required this.description,
-    required this.isCompleted,
-    required this.priority,
-    this.dueDate,
-    this.parentTaskId,
-    required this.subTasks,
-    required this.createdAt,
-    required this.updatedAt,
+    this.isCompleted = false,
+    this.subTasks = const [],
+    this.type = TaskType.single,
+    this.totalSteps = 1,
+    this.completedSteps = 0,
+    this.maxDepth = 5,
   });
+
+  double get progress {
+    if (type == TaskType.stepByStep) {
+      return totalSteps > 0 ? completedSteps / totalSteps : 0.0;
+    }
+
+    if (subTasks.isEmpty) return isCompleted ? 1.0 : 0.0;
+
+    final totalProgress = subTasks.map((task) => task.progress).reduce((a, b) => a + b);
+    return totalProgress / subTasks.length;
+  }
+
+  bool get canAddSubTask => calculateDepth() < maxDepth;
+
+  int calculateDepth([int currentDepth = 0]) {
+    if (subTasks.isEmpty) return currentDepth;
+    final depths = subTasks.map((task) => task.calculateDepth(currentDepth + 1));
+    return depths.reduce((a, b) => a > b ? a : b);
+  }
 
   Task copyWith({
     String? id,
     String? title,
     String? description,
     bool? isCompleted,
-    int? priority,
-    DateTime? dueDate,
-    String? parentTaskId,
     List<Task>? subTasks,
-    DateTime? createdAt,
-    DateTime? updatedAt,
+    TaskType? type,
+    int? totalSteps,
+    int? completedSteps,
+    int? maxDepth,
   }) {
     return Task(
       id: id ?? this.id,
       title: title ?? this.title,
       description: description ?? this.description,
       isCompleted: isCompleted ?? this.isCompleted,
-      priority: priority ?? this.priority,
-      dueDate: dueDate ?? this.dueDate,
-      parentTaskId: parentTaskId ?? this.parentTaskId,
       subTasks: subTasks ?? this.subTasks,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
+      type: type ?? this.type,
+      totalSteps: totalSteps ?? this.totalSteps,
+      completedSteps: completedSteps ?? this.completedSteps,
+      maxDepth: maxDepth ?? this.maxDepth,
     );
   }
 
@@ -56,12 +73,11 @@ class Task {
       'title': title,
       'description': description,
       'isCompleted': isCompleted,
-      'priority': priority,
-      'dueDate': dueDate?.millisecondsSinceEpoch,
-      'parentTaskId': parentTaskId,
       'subTasks': subTasks.map((task) => task.toJson()).toList(),
-      'createdAt': createdAt.millisecondsSinceEpoch,
-      'updatedAt': updatedAt.millisecondsSinceEpoch,
+      'type': type.index,
+      'totalSteps': totalSteps,
+      'completedSteps': completedSteps,
+      'maxDepth': maxDepth,
     };
   }
 
@@ -71,29 +87,13 @@ class Task {
       title: json['title'] ?? '',
       description: json['description'] ?? '',
       isCompleted: json['isCompleted'] ?? false,
-      priority: json['priority'] ?? 1,
-      dueDate: json['dueDate'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(json['dueDate'])
-          : null,
-      parentTaskId: json['parentTaskId'],
       subTasks: (json['subTasks'] as List<dynamic>?)
           ?.map((taskJson) => Task.fromJson(taskJson))
-          .toList() ??
-          [],
-      createdAt: DateTime.fromMillisecondsSinceEpoch(json['createdAt'] ?? 0),
-      updatedAt: DateTime.fromMillisecondsSinceEpoch(json['updatedAt'] ?? 0),
+          .toList() ?? [],
+      type: TaskType.values[json['type'] as int? ?? 0],
+      totalSteps: json['totalSteps'] as int? ?? 1,
+      completedSteps: json['completedSteps'] as int? ?? 0,
+      maxDepth: json['maxDepth'] as int? ?? 5,
     );
   }
-
-  // Вспомогательные методы
-  double get progress {
-    if (subTasks.isEmpty) {
-      return isCompleted ? 1.0 : 0.0;
-    }
-
-    final completedCount = subTasks.where((task) => task.isCompleted).length;
-    return completedCount / subTasks.length;
-  }
-
-  bool get hasSubtasks => subTasks.isNotEmpty;
 }
