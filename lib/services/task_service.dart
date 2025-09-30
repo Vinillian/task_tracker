@@ -1,179 +1,183 @@
 import '../models/task.dart';
-import '../models/stage.dart'; // ← НОВЫЙ импорт
-import '../models/step.dart';  // ← НОВЫЙ импорт
-import '../models/task_type.dart';
-import '../models/recurrence.dart';
+import '../models/project.dart';
+import 'completion_service.dart';
 
 class TaskService {
-  // Создание задачи
-  static Task createTask({
-    required String name,
-    required int steps,
-    TaskType taskType = TaskType.stepByStep,
-    Recurrence? recurrence,
-    DateTime? dueDate,
+  final CompletionService _completionService;
+
+  TaskService(this._completionService);
+
+  // Создание новой задачи
+  Task createTask({
+    required String title,
+    required String projectId,
+    TaskType type = TaskType.single,
     String? description,
-    int colorValue = 0xFF2196F3, // Цвет по умолчанию
+    int priority = 1,
+    DateTime? dueDate,
+    int estimatedMinutes = 0,
+    int nestingLevel = 0,
   }) {
     return Task(
-      name: name,
-      totalSteps: steps,
-      completedSteps: 0,
-      stages: [],
-      taskType: taskType.toString(),
-      recurrence: recurrence,
-      dueDate: dueDate,
+      id: 'task_${DateTime.now().millisecondsSinceEpoch}',
+      title: title,
       description: description,
       isCompleted: false,
+      completedSubtasks: 0,
+      totalSubtasks: 0,
+      subtasks: [],
+      type: type,
+      priority: priority,
+      dueDate: dueDate,
+      estimatedMinutes: estimatedMinutes,
+      projectId: projectId,
+      nestingLevel: nestingLevel,
+      createdAt: DateTime.now(),
     );
   }
 
-  // Создание этапа
-  static Stage createStage(String name, int steps, {String stageType = 'stepByStep'}) {
-    return Stage(
-      name: name,
-      totalSteps: steps,
-      completedSteps: 0,
-      stageType: stageType,
-      isCompleted: false,
-      steps: [],
-    );
-  }
-
-  // Создание шага
-  static Step createStep(String name, int steps, {String stepType = 'stepByStep'}) {
-    return Step(
-      name: name,
-      totalSteps: steps,
-      completedSteps: 0,
-      stepType: stepType,
-      isCompleted: false,
-    );
-  }
-
-  // Переключение завершения задачи
-  static Task toggleTaskCompletion(Task task) {
-    return Task(
-      name: task.name,
-      completedSteps: task.completedSteps,
-      totalSteps: task.totalSteps,
-      stages: task.stages,
-      taskType: task.taskType,
-      recurrence: task.recurrence,
-      dueDate: task.dueDate,
-      isCompleted: !task.isCompleted,
-      description: task.description,
-    );
-  }
-
-  // Переключение завершения этапа
-  static Stage toggleStageCompletion(Stage stage) {
-    return Stage(
-      name: stage.name,
-      completedSteps: stage.completedSteps,
-      totalSteps: stage.totalSteps,
-      stageType: stage.stageType,
-      isCompleted: !stage.isCompleted,
-      steps: stage.steps,
-    );
-  }
-
-  // Переключение завершения шага
-  static Step toggleStepCompletion(Step step) {
-    return Step(
-      name: step.name,
-      completedSteps: step.completedSteps,
-      totalSteps: step.totalSteps,
-      stepType: step.stepType,
-      isCompleted: !step.isCompleted,
-    );
-  }
-
-  // Добавление прогресса к задаче
-  static Task addProgressToTask(Task task, int steps) {
-    final newCompletedSteps = (task.completedSteps + steps).clamp(0, task.totalSteps);
-    final isCompleted = newCompletedSteps >= task.totalSteps;
-
-    return Task(
-      name: task.name,
-      completedSteps: newCompletedSteps,
-      totalSteps: task.totalSteps,
-      stages: task.stages,
-      taskType: task.taskType,
-      recurrence: task.recurrence,
-      dueDate: task.dueDate,
-      isCompleted: isCompleted,
-      description: task.description,
-    );
-  }
-
-  // Добавление прогресса к этапу
-  static Stage addProgressToStage(Stage stage, int steps) {
-    if (stage.stageType == 'singleStep') {
-      return toggleStageCompletion(stage);
+  // Создание подзадачи
+  Task createSubtask(Task parentTask, String title) {
+    if (!parentTask.canAddSubtask()) {
+      throw Exception('Cannot add subtask: maximum nesting level reached');
     }
 
-    return Stage(
-      name: stage.name,
-      completedSteps: (stage.completedSteps + steps).clamp(0, stage.totalSteps),
-      totalSteps: stage.totalSteps,
-      stageType: stage.stageType,
-      isCompleted: stage.isCompleted,
-      steps: stage.steps,
+    return Task(
+      id: 'subtask_${DateTime.now().millisecondsSinceEpoch}',
+      title: title,
+      isCompleted: false,
+      completedSubtasks: 0,
+      totalSubtasks: 0,
+      subtasks: [],
+      type: TaskType.single,
+      priority: parentTask.priority,
+      projectId: parentTask.projectId,
+      nestingLevel: parentTask.nestingLevel + 1,
+      createdAt: DateTime.now(),
     );
   }
 
-  // Добавление прогресса к шагу
-  static Step addProgressToStep(Step step, int steps) {
-    if (step.stepType == 'singleStep') {
-      return toggleStepCompletion(step);
+  // Завершение задачи
+  Task completeTask(Task task) {
+    return _completionService.completeTask(task, isCompleted: true);
+  }
+
+  // Отмена завершения задачи
+  Task uncompleteTask(Task task) {
+    return _completionService.completeTask(task, isCompleted: false);
+  }
+
+  // Завершение подзадачи
+  Task completeSubtask(Task parentTask, String subtaskId) {
+    return _completionService.completeSubtask(parentTask, subtaskId, isCompleted: true);
+  }
+
+  // Добавление подзадачи к родительской задаче
+  Task addSubtaskToParent(Task parentTask, Task subtask) {
+    return parentTask.addSubtask(subtask);
+  }
+
+  // Удаление подзадачи
+  Task removeSubtask(Task parentTask, String subtaskId) {
+    return parentTask.removeSubtask(subtaskId);
+  }
+
+  // Обновление заголовка задачи
+  Task updateTaskTitle(Task task, String newTitle) {
+    return task.copyWith(title: newTitle);
+  }
+
+  // Обновление описания задачи
+  Task updateTaskDescription(Task task, String newDescription) {
+    return task.copyWith(description: newDescription);
+  }
+
+  // Обновление приоритета задачи
+  Task updateTaskPriority(Task task, int newPriority) {
+    return task.copyWith(priority: newPriority);
+  }
+
+  // Обновление даты выполнения
+  Task updateTaskDueDate(Task task, DateTime? newDueDate) {
+    return task.copyWith(dueDate: newDueDate);
+  }
+
+  // Получение всех подзадач (рекурсивно)
+  List<Task> getAllSubtasks(Task task) {
+    final allSubtasks = <Task>[];
+    _collectSubtasksRecursively(task, allSubtasks);
+    return allSubtasks;
+  }
+
+  void _collectSubtasksRecursively(Task task, List<Task> result) {
+    for (final subtask in task.subtasks) {
+      result.add(subtask);
+      _collectSubtasksRecursively(subtask, result);
+    }
+  }
+
+  // Поиск задачи по ID (рекурсивно)
+  Task? findTaskById(List<Task> tasks, String taskId) {
+    for (final task in tasks) {
+      if (task.id == taskId) return task;
+      final found = _findInSubtasks(task, taskId);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
+  Task? _findInSubtasks(Task parentTask, String taskId) {
+    for (final subtask in parentTask.subtasks) {
+      if (subtask.id == taskId) return subtask;
+      final found = _findInSubtasks(subtask, taskId);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
+  // Проверка валидности структуры задач
+  bool validateTaskStructure(Task task) {
+    // Проверяем уровень вложенности
+    if (task.nestingLevel > 2) {
+      return false;
     }
 
-    return Step(
-      name: step.name,
-      completedSteps: (step.completedSteps + steps).clamp(0, step.totalSteps),
-      totalSteps: step.totalSteps,
-      stepType: step.stepType,
-      isCompleted: step.isCompleted,
-    );
+    // Проверяем подзадачи
+    for (final subtask in task.subtasks) {
+      if (subtask.nestingLevel != task.nestingLevel + 1) {
+        return false;
+      }
+      if (!validateTaskStructure(subtask)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
-  // Обновление задачи с сохранением цвета
-  static Task updateTask(Task oldTask, String name, int steps, {int? colorValue}) {
-    return Task(
-      name: name,
-      completedSteps: oldTask.completedSteps.clamp(0, steps),
-      totalSteps: steps,
-      stages: oldTask.stages,
-      taskType: oldTask.taskType,
-      recurrence: oldTask.recurrence,
-      dueDate: oldTask.dueDate,
-      isCompleted: oldTask.isCompleted,
-      description: oldTask.description,
-      colorValue: colorValue ?? oldTask.colorValue, // Сохраняем цвет
-    );
+  // Исправление структуры задач
+  Task fixTaskStructure(Task task) {
+    var fixedTask = _completionService.fixTaskState(task);
+
+    // Исправляем уровень вложенности подзадач
+    final fixedSubtasks = fixedTask.subtasks.map((subtask) {
+      var fixedSubtask = fixTaskStructure(subtask);
+      if (fixedSubtask.nestingLevel != fixedTask.nestingLevel + 1) {
+        fixedSubtask = fixedSubtask.copyWith(nestingLevel: fixedTask.nestingLevel + 1);
+      }
+      return fixedSubtask;
+    }).toList();
+
+    return fixedTask.copyWith(subtasks: fixedSubtasks);
   }
 
-  // Обновление этапа
-  static Stage updateStage(Stage oldStage, String name, int steps) {
-    return Stage(
-      name: name,
-      completedSteps: oldStage.completedSteps.clamp(0, steps),
-      totalSteps: steps,
-      stageType: oldStage.stageType,
-      isCompleted: oldStage.isCompleted,
-      steps: oldStage.steps,
-    );
+  // Получение прогресса задачи
+  double getTaskProgress(Task task) {
+    return task.progress;
   }
 
-  // Обновление шага
-  static Step updateStep(Step oldStep, String name, int steps) {
-    return Step(
-      name: name,
-      completedSteps: oldStep.completedSteps.clamp(0, steps),
-      totalSteps: steps,
-      stepType: oldStep.stepType,
-      isCompleted: oldStep.isCompleted,
-    );
+  // Проверка, можно ли добавить подзадачу
+  bool canAddSubtask(Task task) {
+    return task.canAddSubtask();
   }
 }

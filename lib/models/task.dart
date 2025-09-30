@@ -1,106 +1,195 @@
-import 'stage.dart';
-import 'package:hive/hive.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 import 'task_type.dart';
-import 'recurrence.dart';
-import 'package:flutter/material.dart';
+
 part 'task.g.dart';
 
-@HiveType(typeId: 2)
+@JsonSerializable()
 class Task {
-  @HiveField(0)
-  final String name;
-
-  @HiveField(1)
-  final int completedSteps;
-
-  @HiveField(2)
-  final int totalSteps;
-
-  @HiveField(3)
-  final List<Stage> stages;
-
-  @HiveField(4)
-  final String taskType;
-
-  @HiveField(5)
-  final Recurrence? recurrence;
-
-  @HiveField(6)
-  final DateTime? dueDate;
-
-  @HiveField(7)
-  final bool isCompleted;
-
-  @HiveField(8)
+  final String id;
+  final String title;
   final String? description;
-
-  @HiveField(9)
-  final DateTime? plannedDate;
-
-  @HiveField(10)
-  final int? colorValue; // ← Сделать nullable
-
-  @HiveField(11) // ← НОВОЕ ПОЛЕ
-  final bool isTracked;
-
+  final bool isCompleted;
+  final int completedSubtasks;
+  final int totalSubtasks;
+  final List<Task> subtasks;
+  final TaskType type;
+  final int priority;
+  final DateTime? dueDate;
+  final int estimatedMinutes;
+  final String projectId;
+  final int nestingLevel;
+  final DateTime createdAt;
+  final DateTime? completedAt;
 
   Task({
-    required this.name,
-    this.completedSteps = 0,
-    required this.totalSteps,
-    List<Stage>? stages,
-    this.taskType = 'stepByStep',
-    this.recurrence,
-    this.dueDate,
-    this.isCompleted = false,
+    required this.id,
+    required this.title,
     this.description,
-    this.plannedDate,
-    this.colorValue, // ← Убрать значение по умолчанию
-    this.isTracked = true, // ← НОВОЕ ЗНАЧЕНИЕ ПО УМОЛЧАНИЮ
-  }) : stages = stages ?? [];
+    required this.isCompleted,
+    required this.completedSubtasks,
+    required this.totalSubtasks,
+    required this.subtasks,
+    required this.type,
+    this.priority = 1,
+    this.dueDate,
+    this.estimatedMinutes = 0,
+    required this.projectId,
+    this.nestingLevel = 0,
+    required this.createdAt,
+    this.completedAt,
+  });
 
-  // Обновить геттер для обработки null
-  Color get color => colorValue != null ? Color(colorValue!) : Colors.blue;
+  factory Task.fromJson(Map<String, dynamic> json) => _$TaskFromJson(json);
+  Map<String, dynamic> toJson() => _$TaskToJson(this);
 
+  // === РЕКУРСИВНЫЕ МЕТОДЫ ===
+
+  Task copyWith({
+    String? id,
+    String? title,
+    String? description,
+    bool? isCompleted,
+    int? completedSubtasks,
+    int? totalSubtasks,
+    List<Task>? subtasks,
+    TaskType? type,
+    int? priority,
+    DateTime? dueDate,
+    int? estimatedMinutes,
+    String? projectId,
+    int? nestingLevel,
+    DateTime? createdAt,
+    DateTime? completedAt,
+  }) {
+    return Task(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      isCompleted: isCompleted ?? this.isCompleted,
+      completedSubtasks: completedSubtasks ?? this.completedSubtasks,
+      totalSubtasks: totalSubtasks ?? this.totalSubtasks,
+      subtasks: subtasks ?? this.subtasks,
+      type: type ?? this.type,
+      priority: priority ?? this.priority,
+      dueDate: dueDate ?? this.dueDate,
+      estimatedMinutes: estimatedMinutes ?? this.estimatedMinutes,
+      projectId: projectId ?? this.projectId,
+      nestingLevel: nestingLevel ?? this.nestingLevel,
+      createdAt: createdAt ?? this.createdAt,
+      completedAt: completedAt ?? this.completedAt,
+    );
+  }
+
+  // Добавление подзадачи
+  Task addSubtask(Task subtask) {
+    final newSubtasks = List<Task>.from(subtasks)..add(subtask);
+    return copyWith(
+      subtasks: newSubtasks,
+      totalSubtasks: totalSubtasks + 1,
+    );
+  }
+
+  // Обновление подзадачи
+  Task updateSubtask(String subtaskId, Task updatedSubtask) {
+    final newSubtasks = subtasks.map((subtask) {
+      return subtask.id == subtaskId ? updatedSubtask : subtask;
+    }).toList();
+
+    return copyWith(subtasks: newSubtasks);
+  }
+
+  // Удаление подзадачи
+  Task removeSubtask(String subtaskId) {
+    final newSubtasks = subtasks.where((subtask) => subtask.id != subtaskId).toList();
+    return copyWith(
+      subtasks: newSubtasks,
+      totalSubtasks: totalSubtasks - 1,
+    );
+  }
+
+  // Рекурсивный расчет выполненных подзадач
+  int calculateCompletedSubtasks() {
+    return subtasks.fold(0, (count, subtask) {
+      return count + (subtask.isCompleted ? 1 : 0) + subtask.calculateCompletedSubtasks();
+    });
+  }
+
+  // Рекурсивный расчет общего количества подзадач
+  int calculateTotalSubtasks() {
+    return subtasks.fold(0, (count, subtask) {
+      return count + 1 + subtask.calculateTotalSubtasks();
+    });
+  }
+
+  // Проверка возможности добавления подзадачи
+  bool canAddSubtask() {
+    return nestingLevel < 2; // Максимум 3 уровня (0, 1, 2)
+  }
+
+  // Создание новой подзадачи
+  Task createNewSubtask(String title) {
+    return Task(
+      id: '${DateTime.now().millisecondsSinceEpoch}',
+      title: title,
+      isCompleted: false,
+      completedSubtasks: 0,
+      totalSubtasks: 0,
+      subtasks: [],
+      type: TaskType.single,
+      projectId: projectId,
+      nestingLevel: nestingLevel + 1,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  // Проверка на наличие подзадач
+  bool get hasSubtasks => subtasks.isNotEmpty;
+
+  // Прогресс в процентах
+  double get progress {
+    if (totalSubtasks == 0) return isCompleted ? 1.0 : 0.0;
+    return completedSubtasks / totalSubtasks;
+  }
+
+  // Для Firestore
   Map<String, dynamic> toFirestore() {
     return {
-      'name': name,
-      'completedSteps': completedSteps,
-      'totalSteps': totalSteps,
-      'stages': stages.map((s) => s.toFirestore()).toList(),
-      'taskType': taskType.toString(),
-      'recurrence': recurrence?.toMap(),
-      'dueDate': dueDate?.toIso8601String(),
-      'isCompleted': isCompleted,
+      'id': id,
+      'title': title,
       'description': description,
-      'plannedDate': plannedDate?.toIso8601String(),
-      'colorValue': colorValue ?? 0xFF2196F3,
-      'isTracked': isTracked, // ← ДОБАВИТЬ
+      'isCompleted': isCompleted,
+      'completedSubtasks': completedSubtasks,
+      'totalSubtasks': totalSubtasks,
+      'subtasks': subtasks.map((subtask) => subtask.toFirestore()).toList(),
+      'type': type.toString(),
+      'priority': priority,
+      'dueDate': dueDate,
+      'estimatedMinutes': estimatedMinutes,
+      'projectId': projectId,
+      'nestingLevel': nestingLevel,
+      'createdAt': Timestamp.fromDate(createdAt),
+      'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
     };
   }
 
-  static Task fromFirestore(Map<String, dynamic> data) {
+  factory Task.fromFirestore(Map<String, dynamic> data) {
     return Task(
-      name: data['name'] ?? '',
-      completedSteps: data['completedSteps'] ?? 0,
-      totalSteps: data['totalSteps'] ?? 1,
-      stages: (data['stages'] as List<dynamic>?)
-          ?.map((s) => Stage.fromFirestore(s))
-          .toList() ?? [],
-      taskType: data['taskType'] ?? 'stepByStep',
-      recurrence: data['recurrence'] != null
-          ? Recurrence.fromMap(data['recurrence'])
-          : null,
-      dueDate: data['dueDate'] != null
-          ? DateTime.parse(data['dueDate'])
-          : null,
-      isCompleted: data['isCompleted'] ?? false,
+      id: data['id'],
+      title: data['title'],
       description: data['description'],
-      plannedDate: data['plannedDate'] != null
-          ? DateTime.parse(data['plannedDate'])
-          : null,
-      colorValue: data['colorValue'] ?? 0xFF2196F3,
-      isTracked: data['isTracked'] ?? true, // ← ДОБАВИТЬ
+      isCompleted: data['isCompleted'],
+      completedSubtasks: data['completedSubtasks'],
+      totalSubtasks: data['totalSubtasks'],
+      subtasks: (data['subtasks'] as List).map((subtaskData) => Task.fromFirestore(subtaskData)).toList(),
+      type: TaskType.values.firstWhere((e) => e.toString() == data['type']),
+      priority: data['priority'],
+      dueDate: data['dueDate'] != null ? (data['dueDate'] as Timestamp).toDate() : null,
+      estimatedMinutes: data['estimatedMinutes'],
+      projectId: data['projectId'],
+      nestingLevel: data['nestingLevel'],
+      createdAt: (data['createdAt'] as Timestamp).toDate(),
+      completedAt: data['completedAt'] != null ? (data['completedAt'] as Timestamp).toDate() : null,
     );
   }
 }

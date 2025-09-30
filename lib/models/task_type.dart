@@ -1,43 +1,37 @@
 enum TaskType {
-  stepByStep,
-  singleStep;
+  single,     // Одиночная задача
+  multiStep,  // Многошаговая (теперь через subtasks)
+  recurring,  // Повторяющаяся
+}
 
-  static TaskType fromString(String value) {
-    switch (value) {
-      case 'stepByStep':
-        return TaskType.stepByStep;
-      case 'singleStep':
-        return TaskType.singleStep;
-      default:
-        return TaskType.stepByStep;
-    }
-  }
-
-  @override
-  String toString() {
-    switch (this) {
-      case TaskType.stepByStep:
-        return 'stepByStep';
-      case TaskType.singleStep:
-        return 'singleStep';
-    }
-  }
-
+extension TaskTypeExtension on TaskType {
   String get displayName {
     switch (this) {
-      case TaskType.stepByStep:
-        return 'Пошаговая';
-      case TaskType.singleStep:
-        return 'Единовременная';
+      case TaskType.single:
+        return 'Одиночная';
+      case TaskType.multiStep:
+        return 'Многошаговая';
+      case TaskType.recurring:
+        return 'Повторяющаяся';
     }
   }
 
   String get description {
     switch (this) {
-      case TaskType.stepByStep:
-        return 'Задача выполняется постепенно через несколько шагов';
-      case TaskType.singleStep:
-        return 'Задача выполняется одним действием (чекбокс)';
+      case TaskType.single:
+        return 'Простая задача без подзадач';
+      case TaskType.multiStep:
+        return 'Задача с вложенными подзадачами';
+      case TaskType.recurring:
+        return 'Повторяющаяся задача';
     }
+  }
+
+  bool get canHaveSubtasks {
+    return this == TaskType.multiStep;
+  }
+
+  bool get isRecurring {
+    return this == TaskType.recurring;
   }
 }

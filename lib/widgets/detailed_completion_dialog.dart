@@ -10,6 +10,7 @@ class DetailedCompletionDialog extends StatefulWidget {
   final Project? project;
   final Task? task;
   final Stage? stage;
+  final DateTime? occurrenceDate; // Добавьте это
 
   const DetailedCompletionDialog({
     super.key,
@@ -17,6 +18,7 @@ class DetailedCompletionDialog extends StatefulWidget {
     this.project,
     this.task,
     this.stage,
+    this.occurrenceDate, // Добавьте это
   });
 
   @override
@@ -356,11 +358,15 @@ class _DetailedCompletionDialogState extends State<DetailedCompletionDialog> {
 
 
   void _completeItem() {
-    Navigator.of(context).pop({
+    final result = {
       'item': _currentItem,
       'project': _project,
       'task': _task,
       'stage': _stage,
-    });
+      'occurrenceDate': widget.occurrenceDate, // Исправьте на widget.occurrenceDate
+      'isRecurring': widget.occurrenceDate != null, // Добавьте это поле
+    };
+
+    Navigator.of(context).pop(result);
   }
 }

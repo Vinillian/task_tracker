@@ -7,7 +7,6 @@ import '../services/firestore_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
-import 'dart:convert' show utf8;
 import 'planning_calendar_screen.dart';
 
 class DrawerScreen extends StatelessWidget {
@@ -68,16 +67,21 @@ class DrawerScreen extends StatelessWidget {
           await firestoreService.saveUser(importedUser, currentAuthUser.uid);
           await localRepo.saveUser(importedUser);
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('✅ Данные успешно импортированы')),
-          );
-
-          Navigator.pop(context);
+          // Убираем проверку mounted для StatelessWidget
+          if (context.mounted) { // Используем context.mounted вместо mounted
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('✅ Данные успешно импортированы')),
+            );
+            Navigator.pop(context);
+          }
         }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка импорта: $e')),
-        );
+        // Убираем проверку mounted для StatelessWidget
+        if (context.mounted) { // Используем context.mounted вместо mounted
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка импорта: $e')),
+          );
+        }
       }
     }
   }
@@ -91,24 +95,25 @@ class DrawerScreen extends StatelessWidget {
 
       if (kIsWeb) {
         await Clipboard.setData(ClipboardData(text: jsonString));
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Данные скопированы в буфер обмена')),
-        );
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('✅ Данные скопированы в буфер обмена')),
+          );
+        }
       } else {
-        final fileName = 'task_tracker_export_${DateTime.now().millisecondsSinceEpoch}.json';
-
-        await Share.shareXFiles([
-          XFile.fromData(
-            Uint8List.fromList(utf8.encode(jsonString)),
-            name: fileName,
-            mimeType: 'application/json',
-          )
-        ]);
+        // Удалить неиспользуемую переменную fileName
+        await Share.share(
+          jsonString,
+          subject: 'Экспорт данных Task Tracker',
+          sharePositionOrigin: Rect.zero,
+        );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка экспорта: $e')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка экспорта: $e')),
+        );
+      }
     }
   }
 
@@ -118,7 +123,7 @@ class DrawerScreen extends StatelessWidget {
       child: ListView(
         children: [
           DrawerHeader(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: Colors.blue,
             ),
             child: Column(
@@ -153,7 +158,10 @@ class DrawerScreen extends StatelessWidget {
             onTap: () async {
               final authService = Provider.of<AuthService>(context, listen: false);
               await authService.signOut();
-              Navigator.pop(context);
+              // Убираем проверку mounted для StatelessWidget
+              if (context.mounted) {
+                Navigator.pop(context);
+              }
             },
           ),
 
@@ -195,7 +203,7 @@ class DrawerScreen extends StatelessWidget {
             title: const Text('Аналитика задач'),
             onTap: () {
               Navigator.pop(context);
-              tabController.animateTo(2); // ← НОВЫЙ ИНДЕКС ДЛЯ АНАЛИТИКИ
+              tabController.animateTo(2);
             },
           ),
 
@@ -230,18 +238,6 @@ class DrawerScreen extends StatelessWidget {
               );
             },
           ),
-
-          // Можно добавить другие дополнительные экраны здесь
-          /*
-          ListTile(
-            leading: Icon(Icons.settings),
-            title: Text('Настройки'),
-            onTap: () {
-              Navigator.pop(context);
-              // Открыть экран настроек
-            },
-          ),
-          */
         ],
       ),
     );

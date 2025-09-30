@@ -45,3 +45,57 @@ class RecurrenceAdapter extends TypeAdapter<Recurrence> {
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }
+
+class RecurrenceTypeAdapter extends TypeAdapter<RecurrenceType> {
+  @override
+  final int typeId = 6;
+
+  @override
+  RecurrenceType read(BinaryReader reader) {
+    switch (reader.readByte()) {
+      case 0:
+        return RecurrenceType.daily;
+      case 1:
+        return RecurrenceType.weekly;
+      case 2:
+        return RecurrenceType.monthly;
+      case 3:
+        return RecurrenceType.yearly;
+      case 4:
+        return RecurrenceType.custom;
+      default:
+        return RecurrenceType.daily;
+    }
+  }
+
+  @override
+  void write(BinaryWriter writer, RecurrenceType obj) {
+    switch (obj) {
+      case RecurrenceType.daily:
+        writer.writeByte(0);
+        break;
+      case RecurrenceType.weekly:
+        writer.writeByte(1);
+        break;
+      case RecurrenceType.monthly:
+        writer.writeByte(2);
+        break;
+      case RecurrenceType.yearly:
+        writer.writeByte(3);
+        break;
+      case RecurrenceType.custom:
+        writer.writeByte(4);
+        break;
+    }
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RecurrenceTypeAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}

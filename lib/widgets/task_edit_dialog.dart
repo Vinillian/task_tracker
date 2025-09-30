@@ -1,19 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/task.dart';
-import '../models/task_type.dart';
 import '../models/recurrence.dart';
-import 'dart:math'; // ← ДОБАВИТЬ ДЛЯ PI И ТРИГОНОМЕТРИЧЕСКИХ ФУНКЦИЙ
 
-// Вспомогательный класс для хранения информации о цвете (ВЫНЕСТИ ЗА ПРЕДЕЛЫ КЛАССА)
-class _ColorOption {
-  final String name;
-  final int value;
-  final IconData icon;
-  final MaterialColor color;
-
-  _ColorOption(this.name, this.value, this.icon, this.color);
-}
 
 class TaskEditDialog extends StatefulWidget {
   final Task? initialTask;
@@ -37,8 +26,12 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
   Recurrence? _recurrence;
   DateTime? _dueDate;
   DateTime? _plannedDate;
-  Recurrence? _plannedRecurrence;
-  int _selectedColor = 0xFF2196F3; // Синий по умолчанию
+  int _selectedColor = 0xFF2196F3;
+
+  // Новые переменные для повторения
+  RecurrenceType? _selectedRecurrenceType;
+  int _recurrenceInterval = 1;
+  List<int> _selectedDaysOfWeek = [];
 
   @override
   void initState() {
@@ -51,7 +44,14 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
       _recurrence = widget.initialTask!.recurrence;
       _dueDate = widget.initialTask!.dueDate;
       _plannedDate = widget.initialTask!.plannedDate;
-      _selectedColor = widget.initialTask!.colorValue ?? 0xFF2196F3; // ← ДОБАВИТЬ ?? 0xFF2196F3
+      _selectedColor = widget.initialTask!.colorValue ?? 0xFF2196F3;
+
+      // Инициализация параметров повторения
+      if (_recurrence != null) {
+        _selectedRecurrenceType = _recurrence!.type;
+        _recurrenceInterval = _recurrence!.interval;
+        _selectedDaysOfWeek = List.from(_recurrence!.daysOfWeek);
+      }
     } else {
       _stepsController.text = '1';
     }
@@ -97,6 +97,11 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
             const SizedBox(height: 16),
             _buildColorPicker(),
             const SizedBox(height: 16),
+
+            // НОВОЕ: Выбор повторения
+            _buildRecurrenceSection(),
+            const SizedBox(height: 16),
+
             ListTile(
               title: Text(_dueDate == null
                   ? 'Установить срок'
@@ -131,21 +136,6 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
                 }
               },
             ),
-            DropdownButtonFormField<RecurrenceType>(
-              value: _plannedRecurrence?.type,
-              items: RecurrenceType.values.map((type) {
-                return DropdownMenuItem(
-                  value: type,
-                  child: Text(Recurrence(type: type).displayText),
-                );
-              }).toList(),
-              onChanged: (type) {
-                setState(() {
-                  _plannedRecurrence = Recurrence(type: type!);
-                });
-              },
-              decoration: const InputDecoration(labelText: 'Повторение планирования'),
-            ),
           ],
         ),
       ),
@@ -162,6 +152,150 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
     );
   }
 
+  Widget _buildRecurrenceSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("Повторение", style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<RecurrenceType>(
+          value: _selectedRecurrenceType,
+          items: RecurrenceType.values.map((type) {
+            return DropdownMenuItem(
+              value: type,
+              child: Text(_getRecurrenceTypeName(type)),
+            );
+          }).toList(),
+          onChanged: (type) {
+            setState(() {
+              _selectedRecurrenceType = type;
+              _updateRecurrence();
+            });
+          },
+          decoration: const InputDecoration(
+            labelText: "Тип повторения",
+            border: OutlineInputBorder(),
+          ),
+        ),
+
+        if (_selectedRecurrenceType != null) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Text("Интервал:"),
+              const SizedBox(width: 8),
+              DropdownButton<int>(
+                value: _recurrenceInterval,
+                items: [1, 2, 3, 4, 5, 6, 7].map((interval) {
+                  return DropdownMenuItem(
+                    value: interval,
+                    child: Text('$interval'),
+                  );
+                }).toList(),
+                onChanged: (interval) {
+                  setState(() {
+                    _recurrenceInterval = interval!;
+                    _updateRecurrence();
+                  });
+                },
+              ),
+              const SizedBox(width: 16),
+              Text(_getRecurrenceDescription()),
+            ],
+          ),
+        ],
+
+        if (_selectedRecurrenceType == RecurrenceType.custom) ...[
+          const SizedBox(height: 12),
+          const Text("Дни недели:"),
+          Wrap(
+            spacing: 8,
+            children: [
+              for (int day = 1; day <= 7; day++)
+                FilterChip(
+                  label: Text(_getDayName(day)),
+                  selected: _selectedDaysOfWeek.contains(day),
+                  onSelected: (selected) {
+                    setState(() {
+                      if (selected) {
+                        _selectedDaysOfWeek.add(day);
+                      } else {
+                        _selectedDaysOfWeek.remove(day);
+                      }
+                      _updateRecurrence();
+                    });
+                  },
+                ),
+            ],
+          ),
+        ],
+
+        if (_recurrence != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            "Текущее правило: ${_recurrence!.displayText}",
+            style: TextStyle(color: Colors.green[700], fontSize: 12),
+          ),
+        ],
+      ],
+    );
+  }
+
+  String _getRecurrenceTypeName(RecurrenceType type) {
+    switch (type) {
+      case RecurrenceType.daily: return 'Ежедневно';
+      case RecurrenceType.weekly: return 'Еженедельно';
+      case RecurrenceType.monthly: return 'Ежемесячно';
+      case RecurrenceType.yearly: return 'Ежегодно';
+      case RecurrenceType.custom: return 'По дням недели';
+    }
+  }
+
+  String _getRecurrenceDescription() {
+    if (_selectedRecurrenceType == null) return '';
+
+    switch (_selectedRecurrenceType!) {
+      case RecurrenceType.daily:
+        return _recurrenceInterval == 1 ? 'каждый день' : 'каждые $_recurrenceInterval дней';
+      case RecurrenceType.weekly:
+        return _recurrenceInterval == 1 ? 'каждую неделю' : 'каждые $_recurrenceInterval недель';
+      case RecurrenceType.monthly:
+        return _recurrenceInterval == 1 ? 'каждый месяц' : 'каждые $_recurrenceInterval месяцев';
+      case RecurrenceType.yearly:
+        return _recurrenceInterval == 1 ? 'каждый год' : 'каждые $_recurrenceInterval лет';
+      case RecurrenceType.custom:
+        return 'по выбранным дням';
+    }
+  }
+
+  String _getDayName(int day) {
+    switch (day) {
+      case 1: return 'Пн';
+      case 2: return 'Вт';
+      case 3: return 'Ср';
+      case 4: return 'Чт';
+      case 5: return 'Пт';
+      case 6: return 'Сб';
+      case 7: return 'Вс';
+      default: return '';
+    }
+  }
+
+  void _updateRecurrence() {
+    if (_selectedRecurrenceType == null) {
+      _recurrence = null;
+      return;
+    }
+
+    _recurrence = Recurrence(
+      type: _selectedRecurrenceType!,
+      interval: _recurrenceInterval,
+      daysOfWeek: _selectedRecurrenceType == RecurrenceType.custom
+          ? _selectedDaysOfWeek
+          : [],
+    );
+  }
+
   bool _isColorPickerExpanded = false;
 
   Widget _buildColorPicker() {
@@ -175,8 +309,6 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 8),
-
-        // Выпадающая палитра (теперь сверху)
         if (_isColorPickerExpanded) ...[
           Container(
             padding: const EdgeInsets.all(4),
@@ -197,7 +329,7 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
                           onTap: () {
                             setState(() {
                               _selectedColor = colorValue;
-                              _isColorPickerExpanded = false; // Закрыть после выбора
+                              _isColorPickerExpanded = false;
                             });
                           },
                           child: Container(
@@ -222,11 +354,8 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
           ),
           const SizedBox(height: 12),
         ],
-
-        // Строка с индикатором (теперь снизу)
         Row(
           children: [
-            // Индикатор цвета (кнопка для открытия/закрытия палитры)
             GestureDetector(
               onTap: () {
                 setState(() {
@@ -243,13 +372,13 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
                 ),
               ),
             ),
+            const SizedBox(width: 12),
+            const Text("Цвет задачи"),
           ],
         ),
       ],
     );
   }
-
-
 
   void _saveTask() {
     final name = _nameController.text.trim();
@@ -265,7 +394,7 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
       completedSteps: widget.initialTask?.completedSteps ?? 0,
       stages: widget.initialTask?.stages ?? [],
       taskType: _selectedTaskType,
-      recurrence: _recurrence,
+      recurrence: _recurrence, // ← Теперь сохраняется повторение
       dueDate: _dueDate,
       isCompleted: widget.initialTask?.isCompleted ?? false,
       description: _descriptionController.text.isEmpty

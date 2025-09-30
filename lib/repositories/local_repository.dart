@@ -1,272 +1,164 @@
-import 'dart:convert';
-import 'dart:io'; // ← ДОБАВИТЬ ДЛЯ File
-import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/app_user.dart';
-import '../models/project.dart';
 import '../models/task.dart';
+import '../models/project.dart';
+import '../models/app_user.dart';
 import '../models/progress_history.dart';
-import '../models/step.dart';
-import '../models/stage.dart';
 
 class LocalRepository {
-  static const String _userBoxName = 'userData';
-  static const String _settingsBoxName = 'settings';
+  static const String _projectsBox = 'projects';
+  static const String _tasksBox = 'tasks';
+  static const String _userBox = 'user';
+  static const String _progressHistoryBox = 'progress_history';
 
-  late Box<AppUser> _userBox;
-  late Box<dynamic> _settingsBox;
-  bool _isInitialized = false;
+  late Box<Project> _projectsBoxInstance;
+  late Box<Task> _tasksBoxInstance;
+  late Box<AppUser> _userBoxInstance;
+  late Box<ProgressHistory> _progressHistoryBoxInstance;
 
   Future<void> init() async {
-    if (_isInitialized) return;
+    _projectsBoxInstance = await Hive.openBox<Project>(_projectsBox);
+    _tasksBoxInstance = await Hive.openBox<Task>(_tasksBox);
+    _userBoxInstance = await Hive.openBox<AppUser>(_userBox);
+    _progressHistoryBoxInstance = await Hive.openBox<ProgressHistory>(_progressHistoryBox);
+  }
 
-    try {
-      print('🔄 Инициализация Hive...');
+  // === PROJECT METHODS ===
 
-      // Инициализация для Web и мобильных
-      if (kIsWeb) {
-        await Hive.initFlutter();
-      } else {
-        final appDocDir = await getApplicationDocumentsDirectory();
-        Hive.init(appDocDir.path);
-      }
+  Future<List<Project>> getProjects() async {
+    return _projectsBoxInstance.values.toList();
+  }
 
-      // Регистрируем адаптеры
-      _registerAdapters();
+  Future<Project?> getProject(String projectId) async {
+    return _projectsBoxInstance.get(projectId);
+  }
 
-      // Пробуем открыть боксы с обработкой ошибок
-      try {
-        _userBox = await Hive.openBox<AppUser>(_userBoxName);
-        _settingsBox = await Hive.openBox(_settingsBoxName);
-        print('✅ Боксы успешно открыты');
-      } catch (e) {
-        print('⚠️ Ошибка открытия боксов: $e. Очищаем поврежденные данные...');
-        await clearCorruptedData();
-      }
+  Future<void> saveProject(Project project) async {
+    await _projectsBoxInstance.put(project.id, project);
+  }
 
-      _isInitialized = true;
-      print('✅ Hive initialized successfully');
-    } catch (e, stack) {
-      print('❌ Critical error initializing Hive: $e');
-      print('Stack trace: $stack');
+  Future<void> saveProjects(List<Project> projects) async {
+    final Map<String, Project> projectsMap = {
+      for (var project in projects) project.id: project
+    };
+    await _projectsBoxInstance.putAll(projectsMap);
+  }
 
-      // Пытаемся восстановиться
-      await Future.delayed(Duration(seconds: 1));
-      await _tryRecovery();
+  Future<void> deleteProject(String projectId) async {
+    await _projectsBoxInstance.delete(projectId);
+  }
+
+  // === TASK METHODS ===
+
+  Future<List<Task>> getTasks() async {
+    return _tasksBoxInstance.values.toList();
+  }
+
+  Future<Task?> getTask(String taskId) async {
+    return _tasksBoxInstance.get(taskId);
+  }
+
+  Future<void> saveTask(Task task) async {
+    await _tasksBoxInstance.put(task.id, task);
+
+    // Рекурсивно сохраняем подзадачи
+    for (final subtask in task.subtasks) {
+      await saveTask(subtask);
     }
   }
 
-  void _registerAdapters() {
-    if (!Hive.isAdapterRegistered(0)) {
-      Hive.registerAdapter(AppUserAdapter());
-    }
-    if (!Hive.isAdapterRegistered(1)) {
-      Hive.registerAdapter(ProjectAdapter());
-    }
-    if (!Hive.isAdapterRegistered(2)) {
-      Hive.registerAdapter(TaskAdapter());
-    }
-    if (!Hive.isAdapterRegistered(3)) {
-      Hive.registerAdapter(StepAdapter());
-    }
-    if (!Hive.isAdapterRegistered(6)) {
-      Hive.registerAdapter(StageAdapter());
-    }
-    if (!Hive.isAdapterRegistered(4)) {
-      Hive.registerAdapter(ProgressHistoryAdapter());
-    }
-    print('✅ Адаптеры зарегистрированы');
-  }
-
-  Future<void> _tryRecovery() async {
-    try {
-      print('🔄 Попытка восстановления...');
-      await Hive.close();
-
-      if (kIsWeb) {
-        await Hive.initFlutter();
-      } else {
-        final appDocDir = await getApplicationDocumentsDirectory();
-        Hive.init(appDocDir.path);
-      }
-
-      _registerAdapters();
-
-      // Пробуем открыть снова
-      _userBox = await Hive.openBox<AppUser>(_userBoxName);
-      _settingsBox = await Hive.openBox(_settingsBoxName);
-
-      _isInitialized = true;
-      print('✅ Восстановление успешно');
-    } catch (e) {
-      print('❌ Восстановление не удалось: $e');
-      // Создаем пустые боксы в памяти как запасной вариант
-      try {
-        _userBox = await Hive.openBox<AppUser>('userData_memory');
-        _settingsBox = await Hive.openBox('settings_memory');
-        _isInitialized = true;
-        print('✅ Созданы резервные боксы в памяти');
-      } catch (e) {
-        print('❌ Критическая ошибка: $e');
-        rethrow;
-      }
+  Future<void> saveTasks(List<Task> tasks) async {
+    for (final task in tasks) {
+      await saveTask(task);
     }
   }
 
-  Future<void> clearCorruptedData() async {
-    try {
-      print('🔄 Очистка поврежденных данных...');
-
-      // Закрываем боксы если они открыты
-      try {
-        await _userBox.close();
-        await _settingsBox.close();
-      } catch (e) {
-        print('⚠️ Ошибка закрытия боксов: $e');
+  Future<void> deleteTask(String taskId) async {
+    final task = await getTask(taskId);
+    if (task != null) {
+      // Рекурсивно удаляем подзадачи
+      for (final subtask in task.subtasks) {
+        await deleteTask(subtask.id);
       }
-
-      // Удаляем файлы данных (только для мобильных)
-      if (!kIsWeb) {
-        try {
-          final appDocDir = await getApplicationDocumentsDirectory();
-          final userBoxFile = File('${appDocDir.path}/userData.hive');
-          final settingsBoxFile = File('${appDocDir.path}/settings.hive');
-          final userBoxLockFile = File('${appDocDir.path}/userData.lock');
-          final settingsBoxLockFile = File('${appDocDir.path}/settings.lock');
-
-          if (await userBoxFile.exists()) {
-            await userBoxFile.delete();
-            print('✅ Удален userData.hive');
-          }
-          if (await settingsBoxFile.exists()) {
-            await settingsBoxFile.delete();
-            print('✅ Удален settings.hive');
-          }
-          if (await userBoxLockFile.exists()) {
-            await userBoxLockFile.delete();
-            print('✅ Удален userData.lock');
-          }
-          if (await settingsBoxLockFile.exists()) {
-            await settingsBoxLockFile.delete();
-            print('✅ Удален settings.lock');
-          }
-        } catch (e) {
-          print('⚠️ Ошибка удаления файлов: $e');
-        }
-      }
-
-      // Переоткрываем боксы
-      _userBox = await Hive.openBox<AppUser>(_userBoxName);
-      _settingsBox = await Hive.openBox(_settingsBoxName);
-
-      print('✅ Поврежденные данные очищены');
-    } catch (e) {
-      print('❌ Ошибка очистки данных: $e');
-      rethrow;
+      await _tasksBoxInstance.delete(taskId);
     }
   }
 
-  // Сохранение пользователя
+  // Получение всех задач проекта (включая подзадачи)
+  Future<List<Task>> getProjectTasks(String projectId) async {
+    final allTasks = await getTasks();
+    return allTasks.where((task) => task.projectId == projectId).toList();
+  }
+
+  // === USER METHODS ===
+
+  Future<AppUser?> getUser() async {
+    return _userBoxInstance.get('current_user');
+  }
+
   Future<void> saveUser(AppUser user) async {
-    try {
-      await _userBox.put('currentUser', user);
-      print('✅ Пользователь сохранен в Hive: ${user.username}');
-    } catch (e) {
-      print('❌ Ошибка сохранения в Hive: $e');
-      rethrow;
-    }
+    await _userBoxInstance.put('current_user', user);
   }
 
-  // Загрузка пользователя
-  AppUser? loadUser() {
-    try {
-      return _userBox.get('currentUser');
-    } catch (e) {
-      print('❌ Ошибка загрузки пользователя: $e');
-      return null;
-    }
+  Future<void> deleteUser() async {
+    await _userBoxInstance.delete('current_user');
   }
 
-  // Экспорт в JSON
-  Future<String> exportToJson() async {
-    final user = loadUser();
-    if (user == null) {
-      throw Exception('No user data to export');
-    }
+  // === PROGRESS HISTORY METHODS ===
 
-    final jsonMap = _convertToJsonCompatible(user.toFirestore());
-    final jsonEncoder = JsonEncoder.withIndent('  ');
-    return jsonEncoder.convert(jsonMap);
+  Future<List<ProgressHistory>> getProgressHistory() async {
+    return _progressHistoryBoxInstance.values.toList();
   }
 
-  Map<String, dynamic> _convertToJsonCompatible(Map<String, dynamic> data) {
-    final result = Map<String, dynamic>.from(data);
-
-    result.forEach((key, value) {
-      if (value is Timestamp) {
-        result[key] = value.toDate().toIso8601String();
-      } else if (value is Map<String, dynamic>) {
-        result[key] = _convertToJsonCompatible(value);
-      } else if (value is List) {
-        result[key] = value.map((item) {
-          if (item is Timestamp) {
-            return item.toDate().toIso8601String();
-          } else if (item is Map<String, dynamic>) {
-            return _convertToJsonCompatible(item);
-          }
-          return item;
-        }).toList();
-      }
-    });
-
-    return result;
+  Future<void> saveProgressHistory(ProgressHistory history) async {
+    await _progressHistoryBoxInstance.put(history.id, history);
   }
 
-  // Импорт из JSON
-  Future<AppUser> importFromJson(String jsonString) async {
-    print('🔄 Начало импорта JSON, длина: ${jsonString.length} символов');
-
-    try {
-      final cleanedJsonString = jsonString.trim();
-
-      if (!cleanedJsonString.startsWith('{') || !cleanedJsonString.endsWith('}')) {
-        throw Exception('Неверный формат JSON файла');
-      }
-
-      final jsonMap = jsonDecode(cleanedJsonString) as Map<String, dynamic>;
-
-      if (jsonMap['username'] == null) {
-        throw Exception('Неверный формат данных: отсутствует поле username');
-      }
-      if (jsonMap['email'] == null) {
-        throw Exception('Неверный формат данных: отсутствует поле email');
-      }
-
-      final user = AppUser.fromFirestore(jsonMap);
-      await saveUser(user);
-
-      print('✅ Импорт успешен: ${user.username}, проектов: ${user.projects.length}');
-      return user;
-
-    } on FormatException catch (e) {
-      throw Exception('Неверный формат JSON: $e');
-    } catch (e) {
-      throw Exception('Ошибка импорта: $e');
-    }
+  Future<void> saveProgressHistoryList(List<ProgressHistory> historyList) async {
+    final Map<String, ProgressHistory> historyMap = {
+      for (var history in historyList) history.id: history
+    };
+    await _progressHistoryBoxInstance.putAll(historyMap);
   }
 
-  // Очистка данных
+  Future<void> deleteProgressHistory(String historyId) async {
+    await _progressHistoryBoxInstance.delete(historyId);
+  }
+
+  // Получение истории прогресса для задачи
+  Future<List<ProgressHistory>> getTaskProgressHistory(String taskId) async {
+    final allHistory = await getProgressHistory();
+    return allHistory.where((history) => history.taskId == taskId).toList();
+  }
+
+  // === MIGRATION METHODS ===
+
   Future<void> clearAllData() async {
-    await _userBox.clear();
-    await _settingsBox.clear();
+    await _projectsBoxInstance.clear();
+    await _tasksBoxInstance.clear();
+    await _userBoxInstance.clear();
+    await _progressHistoryBoxInstance.clear();
   }
 
-  // Закрытие боксов
   Future<void> close() async {
-    await _userBox.close();
-    await _settingsBox.close();
+    await _projectsBoxInstance.close();
+    await _tasksBoxInstance.close();
+    await _userBoxInstance.close();
+    await _progressHistoryBoxInstance.close();
+  }
+
+  // Проверка наличия данных
+  bool hasData() {
+    return _projectsBoxInstance.isNotEmpty ||
+        _tasksBoxInstance.isNotEmpty ||
+        _userBoxInstance.isNotEmpty;
+  }
+
+  // Получение статистики
+  Map<String, int> getStats() {
+    return {
+      'projects': _projectsBoxInstance.length,
+      'tasks': _tasksBoxInstance.length,
+      'progressHistory': _progressHistoryBoxInstance.length,
+    };
   }
 }
