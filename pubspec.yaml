@@ -12,20 +12,14 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.2
-  cloud_firestore: ^4.15.4
-  firebase_core: ^2.28.0
-  shared_preferences: ^2.2.2
-  provider: ^6.1.1
-  intl: ^0.18.1
-  table_calendar: ^3.0.9
-  flutter_slidable: ^2.0.0
+  shared_preferences: ^2.2.2  # ДОБАВИЛИ ЭТУ СТРОКУ
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
-  build_runner: ^2.4.7
-  mockito: ^5.4.4
+  mockito: ^5.5.1
+  build_runner: ^2.8.0
 
 flutter:
   uses-material-design: true
