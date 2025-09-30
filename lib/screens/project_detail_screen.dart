@@ -217,6 +217,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 4),
+            Text(
+              'Прогресс учитывает все задачи и подзадачи',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.grey.shade500,
+              ),
+            ),
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

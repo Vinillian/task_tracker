@@ -1,5 +1,6 @@
 // models/project.dart
 import 'task.dart';
+import 'task_type.dart'; // ✅ ДОБАВЛЕН ИМПОРТ
 
 class Project {
   final String id;
@@ -16,16 +17,90 @@ class Project {
     required this.createdAt,
   });
 
+  // ✅ ГИБРИДНАЯ ЛОГИКА: прогресс проекта учитывает ВСЕ задачи и подзадачи
   double get progress {
     if (tasks.isEmpty) return 0.0;
-    final totalProgress = tasks.map((task) => task.progress).reduce((a, b) => a + b);
-    return totalProgress / tasks.length;
+
+    // Рекурсивно собираем прогресс всех задач и подзадач
+    double totalProgress = 0.0;
+    int totalTasksCount = 0;
+
+    void calculateTaskProgress(Task task) {
+      // Добавляем прогресс текущей задачи
+      totalProgress += _getTaskOwnProgress(task);
+      totalTasksCount += 1;
+
+      // Рекурсивно обрабатываем подзадачи
+      for (final subTask in task.subTasks) {
+        calculateTaskProgress(subTask);
+      }
+    }
+
+    // Обрабатываем все прямые задачи проекта
+    for (final task in tasks) {
+      calculateTaskProgress(task);
+    }
+
+    return totalTasksCount > 0 ? totalProgress / totalTasksCount : 0.0;
   }
 
-  int get totalTasks => tasks.length;
+  // ✅ Вспомогательный метод: прогресс только самой задачи (без учета подзадач)
+  double _getTaskOwnProgress(Task task) {
+    if (task.type == TaskType.stepByStep) {
+      return task.totalSteps > 0 ? task.completedSteps / task.totalSteps : 0.0;
+    } else {
+      return task.isCompleted ? 1.0 : 0.0;
+    }
+  }
 
-  int get completedTasks => tasks.where((task) => task.isCompleted).length;
+  // ✅ Счетчики тоже учитывают ВСЕ задачи рекурсивно
+  int get totalTasks {
+    int count = 0;
 
+    void countTasks(Task task) {
+      count += 1;
+      for (final subTask in task.subTasks) {
+        countTasks(subTask);
+      }
+    }
+
+    for (final task in tasks) {
+      countTasks(task);
+    }
+
+    return count;
+  }
+
+  int get completedTasks {
+    int completedCount = 0;
+
+    void countCompletedTasks(Task task) {
+      if (_isTaskCompleted(task)) {
+        completedCount += 1;
+      }
+
+      for (final subTask in task.subTasks) {
+        countCompletedTasks(subTask);
+      }
+    }
+
+    for (final task in tasks) {
+      countCompletedTasks(task);
+    }
+
+    return completedCount;
+  }
+
+  // ✅ Вспомогательный метод: проверка завершения задачи (только собственный статус)
+  bool _isTaskCompleted(Task task) {
+    if (task.type == TaskType.stepByStep) {
+      return task.completedSteps == task.totalSteps;
+    } else {
+      return task.isCompleted;
+    }
+  }
+
+  // Остальные методы без изменений...
   Project copyWith({
     String? id,
     String? name,

@@ -24,15 +24,12 @@ class Task {
     this.maxDepth = 5,
   });
 
+  // ✅ ПРОГРЕСС ЗАДАЧИ - ТОЛЬКО СОБСТВЕННЫЙ (без подзадач)
   double get progress {
     if (type == TaskType.stepByStep) {
       return totalSteps > 0 ? completedSteps / totalSteps : 0.0;
     }
-
-    if (subTasks.isEmpty) return isCompleted ? 1.0 : 0.0;
-
-    final totalProgress = subTasks.map((task) => task.progress).reduce((a, b) => a + b);
-    return totalProgress / subTasks.length;
+    return isCompleted ? 1.0 : 0.0;
   }
 
   bool get canAddSubTask => calculateDepth() < maxDepth;

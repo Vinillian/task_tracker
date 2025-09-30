@@ -105,4 +105,77 @@ void main() {
       expect(deserialized.tasks[0].title, 'Test Task');
     });
   });
+
+
+  test('Project progress includes all nested tasks', () {
+    // Глубоко вложенные задачи
+    final subSubTask = Task(id: '1-1-1', title: 'Sub Sub Task', description: '', isCompleted: true);
+    final subTask = Task(id: '1-1', title: 'Sub Task', description: '', isCompleted: false, subTasks: [subSubTask]);
+    final mainTask = Task(id: '1', title: 'Main Task', description: '', isCompleted: false, subTasks: [subTask]);
+
+    final project = Project(
+      id: '1',
+      name: 'Test Project',
+      description: 'Test Description',
+      tasks: [mainTask],
+      createdAt: DateTime.now(),
+    );
+
+    // Прогресс должен учитывать ВСЕ задачи:
+    // mainTask: 0% (не выполнена)
+    // subTask: 0% (не выполнена)
+    // subSubTask: 100% (выполнена)
+    // Общий прогресс: (0.0 + 0.0 + 1.0) / 3 = 0.333...
+    expect(project.progress, closeTo(0.333, 0.001));
+    expect(project.totalTasks, 3); // Все 3 задачи
+    expect(project.completedTasks, 1); // Только subSubTask выполнена
+  });
+
+  test('Task progress shows only task itself (ignores subtasks)', () {
+    final subTask = Task(id: '1-1', title: 'Sub Task', description: '', isCompleted: true);
+    final task = Task(
+        id: '1',
+        title: 'Main Task',
+        description: '',
+        isCompleted: false, // Основная задача не выполнена
+        subTasks: [subTask] // Но подзадача выполнена
+    );
+
+    // ✅ Прогресс показывает ТОЛЬКО собственную задачу (0%)
+    // Подзадачи не влияют на прогресс основной задачи
+    expect(task.progress, 0.0);
+
+    // ✅ Подзадача имеет свой собственный прогресс (100%)
+    expect(subTask.progress, 1.0);
+  });
+
+  test('Project progress with complex nesting', () {
+    // Создаем сложную структуру:
+    // - Main Task 1: 0% (не выполнена)
+    //   - Sub Task 1: 100% (выполнена)
+    //   - Sub Task 2: 0% (не выполнена)
+    //     - Sub Sub Task: 100% (выполнена)
+    // - Main Task 2: 100% (выполнена)
+
+    final subSubTask = Task(id: '1-2-1', title: 'Sub Sub Task', description: '', isCompleted: true);
+    final subTask1 = Task(id: '1-1', title: 'Sub Task 1', description: '', isCompleted: true);
+    final subTask2 = Task(id: '1-2', title: 'Sub Task 2', description: '', isCompleted: false, subTasks: [subSubTask]);
+    final mainTask1 = Task(id: '1', title: 'Main Task 1', description: '', isCompleted: false, subTasks: [subTask1, subTask2]);
+    final mainTask2 = Task(id: '2', title: 'Main Task 2', description: '', isCompleted: true);
+
+    final project = Project(
+      id: '1',
+      name: 'Test Project',
+      description: 'Test Description',
+      tasks: [mainTask1, mainTask2],
+      createdAt: DateTime.now(),
+    );
+
+    // Всего задач: 5 (mainTask1, subTask1, subTask2, subSubTask, mainTask2)
+    // Выполнено: 3 (subTask1, subSubTask, mainTask2)
+    // Прогресс: (0 + 1 + 0 + 1 + 1) / 5 = 3/5 = 0.6
+    expect(project.progress, 0.6);
+    expect(project.totalTasks, 5);
+    expect(project.completedTasks, 3);
+  });
 }

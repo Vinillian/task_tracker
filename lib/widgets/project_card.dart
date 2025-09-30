@@ -190,6 +190,14 @@ class _ProjectCardState extends State<ProjectCard> {
             ),
             const SizedBox(height: 4),
             Text(
+              'Прогресс учитывает все задачи и подзадачи',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.grey.shade500,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
               '${widget.project.completedTasks}/${widget.project.totalTasks} задач выполнено',
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
