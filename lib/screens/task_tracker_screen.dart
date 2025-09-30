@@ -8,8 +8,15 @@ import '../models/progress_history.dart';
 import '../widgets/statistics_widgets.dart';
 import 'project_list_screen.dart';
 import 'drawer_screen.dart';
-import 'planning_calendar_screen.dart'; // ДОБАВЬТЕ ЭТОТ ИМПОРТ
+import 'planning_calendar_screen.dart'; // ← Должен быть этот импорт
 import '../repositories/local_repository.dart';
+import '../models/task.dart';
+import '../models/stage.dart';
+import '../models/step.dart' as custom_step;
+import '../services/completion_service.dart';
+import 'calendar_screen.dart';
+import '../widgets/task_heatmap_widget.dart'; // ← ДОБАВИТЬ
+
 
 class TaskTrackerScreen extends StatefulWidget {
   const TaskTrackerScreen({super.key});
@@ -22,17 +29,20 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     with SingleTickerProviderStateMixin {
   AppUser? currentUser;
   final FirestoreService _firestoreService = FirestoreService();
-  late TabController _tabController;
+
+  // TabController делаем доступным для Drawer
+  TabController get tabController => _tabControllerInternal;
+  late TabController _tabControllerInternal;
+
   String? _saveMessage;
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this); // Измените 2 на 3
+    _tabControllerInternal = TabController(length: 4, vsync: this);
     _loadUserData();
   }
-
 
   // Метод обновления данных
   Future<void> _refreshData() async {
@@ -98,6 +108,19 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
     } catch (e) {
       print('❌ Неожиданная ошибка в _loadUserData: $e');
     }
+  }
+
+  // Метод для обработки завершения задач из экрана планирования
+  void _handleItemCompletionFromPlanning(Map<String, dynamic> completionResult) {
+    _handleItemCompletion(completionResult);
+
+    // Показываем уведомление
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('✅ Задача выполнена!'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   // Метод для сохранения текущего пользователя в Firestore
@@ -244,17 +267,20 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         bottom: TabBar(
-          controller: _tabController,
+          controller: _tabControllerInternal, // ← ИСПРАВИТЬ НА _tabControllerInternal
           tabs: const [
             Tab(icon: Icon(Icons.list), text: 'Проекты'),
             Tab(icon: Icon(Icons.bar_chart), text: 'Статистика'),
-            Tab(icon: Icon(Icons.calendar_today), text: 'Планирование'),
+            Tab(icon: Icon(Icons.analytics), text: 'Аналитика'), // ← НОВАЯ ВКЛАДКА
+            Tab(icon: Icon(Icons.calendar_month), text: 'Календарь'),
           ],
         ),
       ),
       drawer: DrawerScreen(
         userEmail: authService.currentUser?.email,
         currentUser: currentUser,
+        tabController: tabController, // ← ПЕРЕДАЕМ КОНТРОЛЛЕР
+        onItemCompletedFromPlanning: _handleItemCompletionFromPlanning, // ← ДОБАВИТЬ ЭТУ СТРОКУ
       ),
       body: Column(
         children: [
@@ -284,26 +310,40 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
             child: RefreshIndicator(
               key: _refreshIndicatorKey,
               onRefresh: _refreshData,
+              // ЗАМЕНИТЬ весь TabBarView на этот исправленный код:
               child: TabBarView(
-                controller: _tabController,
+                controller: _tabControllerInternal,
                 children: [
+                  // Вкладка 0: Проекты
                   currentUser != null
                       ? ProjectListScreen(
-                    currentUser: currentUser,
-                    onUserChanged: (user) {
-                      setState(() => currentUser = user);
-                      _saveCurrentUser();
-                    },
-                    onAddProject: _addProject,
-                    onDeleteProject: _deleteProject,
-                    onAddProgressHistory: _addProgressHistory,
-                  )
+                          currentUser: currentUser,
+                          onUserChanged: (user) {
+                            setState(() => currentUser = user);
+                            _saveCurrentUser();
+                          },
+                          onAddProject: _addProject,
+                          onDeleteProject: _deleteProject,
+                          onAddProgressHistory: _addProgressHistory,
+                        )
                       : const Center(child: CircularProgressIndicator()),
+                  
+                  // Вкладка 1: Статистика  
                   currentUser != null
                       ? StatisticsWidgets.buildStatisticsTab(context, currentUser)
                       : const Center(child: CircularProgressIndicator()),
+                  
+                  // Вкладка 2: Аналитика (НОВАЯ)
                   currentUser != null
-                      ? PlanningCalendarScreen(currentUser: currentUser) // Новая вкладка
+                      ? TaskHeatmapWidget(currentUser: currentUser)
+                      : const Center(child: CircularProgressIndicator()),
+                  
+                  // Вкладка 3: Календарь (была вкладка 2)
+                  currentUser != null
+                      ? CalendarScreen(
+                          currentUser: currentUser,
+                          onItemCompleted: _handleItemCompletion,
+                        )
                       : const Center(child: CircularProgressIndicator()),
                 ],
               ),
@@ -322,7 +362,108 @@ class _TaskTrackerScreenState extends State<TaskTrackerScreen>
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _tabControllerInternal.dispose(); // ← ИСПРАВИТЬ НА _tabControllerInternal
     super.dispose();
   }
-}
+
+  void _handleItemCompletion(Map<String, dynamic> completionResult) {
+    if (completionResult['item'] == null || currentUser == null) return;
+
+    final completedItem = completionResult['item'];
+    final project = completionResult['project'];
+    final task = completionResult['task'];
+    final stage = completionResult['stage'];
+
+    // Используем CompletionService для обработки
+    final result = CompletionService.completeItemWithHistory(
+      item: completedItem,
+      stepsAdded: 1, // По умолчанию +1 шаг
+      itemName: CompletionService.getItemName(completedItem),
+      itemType: CompletionService.getItemType(completedItem),
+      currentHistory: currentUser!.progressHistory,
+    );
+
+    // Обновляем проекты
+    final updatedProjects = currentUser!.projects.map((p) => p.name == project?.name
+        ? _updateProjectWithCompletion(p, result['updatedItem'], task, stage)
+        : p
+    ).toList();
+
+    setState(() {
+      currentUser = AppUser(
+        username: currentUser!.username,
+        email: currentUser!.email,
+        projects: updatedProjects,
+        progressHistory: result['updatedHistory'],
+      );
+    });
+
+    _saveCurrentUser();
+
+    // Показываем уведомление
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('✅ ${CompletionService.getItemName(completedItem)} выполнено!'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Project _updateProjectWithCompletion(Project project, dynamic completedItem, Task? parentTask, Stage? parentStage) {
+    final updatedTasks = project.tasks.map((t) {
+      // Если это задача верхнего уровня
+      if (completedItem is Task && t.name == completedItem.name) {
+        return completedItem;
+      }
+
+      // Если это этап или шаг внутри задачи
+      if (parentTask != null && t.name == parentTask.name) {
+        final updatedStages = t.stages.map((s) {
+          // Если это этап
+          if (completedItem is Stage && s.name == completedItem.name) {
+            return completedItem;
+          }
+
+          // Если это шаг внутри этапа
+          if (parentStage != null && s.name == parentStage.name && completedItem is custom_step.Step) {
+            final updatedSteps = s.steps.map((step) =>
+            step.name == completedItem.name ? completedItem : step
+            ).toList();
+            return Stage(
+              name: s.name,
+              completedSteps: s.completedSteps,
+              totalSteps: s.totalSteps,
+              stageType: s.stageType,
+              isCompleted: s.isCompleted,
+              steps: updatedSteps,
+              plannedDate: s.plannedDate,
+              recurrence: s.recurrence,
+            );
+          }
+
+          return s;
+        }).toList();
+
+        return Task(
+          name: t.name,
+          completedSteps: t.completedSteps,
+          totalSteps: t.totalSteps,
+          stages: updatedStages,
+          taskType: t.taskType,
+          recurrence: t.recurrence,
+          dueDate: t.dueDate,
+          isCompleted: t.isCompleted,
+          description: t.description,
+          plannedDate: t.plannedDate,
+        );
+      }
+
+      return t;
+    }).toList();
+
+    return Project(
+      name: project.name,
+      tasks: updatedTasks,
+    );
+  }
+  }

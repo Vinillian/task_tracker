@@ -2,7 +2,7 @@ import 'stage.dart';
 import 'package:hive/hive.dart';
 import 'task_type.dart';
 import 'recurrence.dart';
-
+import 'package:flutter/material.dart';
 part 'task.g.dart';
 
 @HiveType(typeId: 2)
@@ -17,7 +17,7 @@ class Task {
   final int totalSteps;
 
   @HiveField(3)
-  final List<Stage> stages; // ← ИЗМЕНИЛИ с subtasks на stages
+  final List<Stage> stages;
 
   @HiveField(4)
   final String taskType;
@@ -37,6 +37,12 @@ class Task {
   @HiveField(9)
   final DateTime? plannedDate;
 
+  @HiveField(10)
+  final int? colorValue; // ← Сделать nullable
+
+  @HiveField(11) // ← НОВОЕ ПОЛЕ
+  final bool isTracked;
+
 
   Task({
     required this.name,
@@ -44,12 +50,17 @@ class Task {
     required this.totalSteps,
     List<Stage>? stages,
     this.taskType = 'stepByStep',
-    this.recurrence, // Уже есть
+    this.recurrence,
     this.dueDate,
     this.isCompleted = false,
     this.description,
-    this.plannedDate, // Добавлено
+    this.plannedDate,
+    this.colorValue, // ← Убрать значение по умолчанию
+    this.isTracked = true, // ← НОВОЕ ЗНАЧЕНИЕ ПО УМОЛЧАНИЮ
   }) : stages = stages ?? [];
+
+  // Обновить геттер для обработки null
+  Color get color => colorValue != null ? Color(colorValue!) : Colors.blue;
 
   Map<String, dynamic> toFirestore() {
     return {
@@ -62,7 +73,9 @@ class Task {
       'dueDate': dueDate?.toIso8601String(),
       'isCompleted': isCompleted,
       'description': description,
-      'plannedDate': plannedDate?.toIso8601String(), // Добавлено
+      'plannedDate': plannedDate?.toIso8601String(),
+      'colorValue': colorValue ?? 0xFF2196F3,
+      'isTracked': isTracked, // ← ДОБАВИТЬ
     };
   }
 
@@ -83,9 +96,11 @@ class Task {
           : null,
       isCompleted: data['isCompleted'] ?? false,
       description: data['description'],
-      plannedDate: data['plannedDate'] != null // Добавлено
+      plannedDate: data['plannedDate'] != null
           ? DateTime.parse(data['plannedDate'])
           : null,
+      colorValue: data['colorValue'] ?? 0xFF2196F3,
+      isTracked: data['isTracked'] ?? true, // ← ДОБАВИТЬ
     );
   }
 }

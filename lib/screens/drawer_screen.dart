@@ -6,17 +6,22 @@ import '../repositories/local_repository.dart';
 import '../services/firestore_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:share_plus/share_plus.dart'; // ← ДОБАВИТЬ для мобильного экспорта
+import 'package:share_plus/share_plus.dart';
 import 'dart:convert' show utf8;
+import 'planning_calendar_screen.dart';
 
 class DrawerScreen extends StatelessWidget {
   final String? userEmail;
   final AppUser? currentUser;
+  final TabController tabController;
+  final Function(Map<String, dynamic>) onItemCompletedFromPlanning;
 
   const DrawerScreen({
     super.key,
     required this.userEmail,
     required this.currentUser,
+    required this.tabController,
+    required this.onItemCompletedFromPlanning,
   });
 
   Future<String?> _showJsonInputDialog(BuildContext context) async {
@@ -25,11 +30,11 @@ class DrawerScreen extends StatelessWidget {
     return await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Вставьте JSON данные'),
+        title: const Text('Вставьте JSON данные'),
         content: TextField(
           controller: controller,
           maxLines: 10,
-          decoration: InputDecoration(
+          decoration: const InputDecoration(
             hintText: 'Вставьте сюда JSON данные...',
             border: OutlineInputBorder(),
           ),
@@ -37,11 +42,11 @@ class DrawerScreen extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Отмена'),
+            child: const Text('Отмена'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, controller.text),
-            child: Text('Импортировать'),
+            child: const Text('Импортировать'),
           ),
         ],
       ),
@@ -64,10 +69,9 @@ class DrawerScreen extends StatelessWidget {
           await localRepo.saveUser(importedUser);
 
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('✅ Данные успешно импортированы')),
+            const SnackBar(content: Text('✅ Данные успешно импортированы')),
           );
 
-          // Просто закрываем drawer, данные обновятся автоматически
           Navigator.pop(context);
         }
       } catch (e) {
@@ -80,22 +84,19 @@ class DrawerScreen extends StatelessWidget {
 
   Future<void> _exportData(BuildContext context) async {
     final localRepo = Provider.of<LocalRepository>(context, listen: false);
-    Navigator.pop(context); // Закрываем drawer сразу
+    Navigator.pop(context);
 
     try {
       final jsonString = await localRepo.exportToJson();
 
       if (kIsWeb) {
-        // ВЕБ-ВЕРСИЯ - копируем в буфер обмена
         await Clipboard.setData(ClipboardData(text: jsonString));
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('✅ Данные скопированы в буфер обмена')),
+          const SnackBar(content: Text('✅ Данные скопированы в буфер обмена')),
         );
       } else {
-        // МОБИЛЬНАЯ ВЕРСИЯ - сохраняем в файл и делимся
         final fileName = 'task_tracker_export_${DateTime.now().millisecondsSinceEpoch}.json';
 
-        // Создаем временный файл и делимся им
         await Share.shareXFiles([
           XFile.fromData(
             Uint8List.fromList(utf8.encode(jsonString)),
@@ -117,20 +118,27 @@ class DrawerScreen extends StatelessWidget {
       child: ListView(
         children: [
           DrawerHeader(
+            decoration: BoxDecoration(
+              color: Colors.blue,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   currentUser?.username ?? userEmail ?? 'Гость',
-                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold
+                  ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
                   userEmail ?? '',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                  style: const TextStyle(color: Colors.white70, fontSize: 14),
                 ),
-                SizedBox(height: 8),
-                Text(
+                const SizedBox(height: 8),
+                const Text(
                   'Task Tracker',
                   style: TextStyle(color: Colors.white, fontSize: 18),
                 ),
@@ -138,10 +146,10 @@ class DrawerScreen extends StatelessWidget {
             ),
           ),
 
-          // КНОПКА ВЫХОДА
+          // СУЩЕСТВУЮЩИЕ ПУНКТЫ МЕНЮ
           ListTile(
-            leading: Icon(Icons.logout),
-            title: Text('Выйти'),
+            leading: const Icon(Icons.logout),
+            title: const Text('Выйти'),
             onTap: () async {
               final authService = Provider.of<AuthService>(context, listen: false);
               await authService.signOut();
@@ -149,19 +157,91 @@ class DrawerScreen extends StatelessWidget {
             },
           ),
 
-          // ЭКСПОРТ ДАННЫХ
           ListTile(
-            leading: Icon(Icons.upload),
-            title: Text('Экспорт данных'),
+            leading: const Icon(Icons.upload),
+            title: const Text('Экспорт данных'),
             onTap: () => _exportData(context),
           ),
 
-          // ИМПОРТ ДАННЫХ
           ListTile(
-            leading: Icon(Icons.download),
-            title: Text('Импорт данных'),
+            leading: const Icon(Icons.download),
+            title: const Text('Импорт данных'),
             onTap: () => _importFromText(context),
           ),
+
+          const Divider(),
+
+          // НАВИГАЦИЯ ПО ОСНОВНЫМ ВКЛАДКАМ
+          ListTile(
+            leading: const Icon(Icons.list),
+            title: const Text('Проекты'),
+            onTap: () {
+              Navigator.pop(context);
+              tabController.animateTo(0);
+            },
+          ),
+
+          ListTile(
+            leading: const Icon(Icons.bar_chart),
+            title: const Text('Статистика'),
+            onTap: () {
+              Navigator.pop(context);
+              tabController.animateTo(1);
+            },
+          ),
+
+          ListTile(
+            leading: const Icon(Icons.analytics),
+            title: const Text('Аналитика задач'),
+            onTap: () {
+              Navigator.pop(context);
+              tabController.animateTo(2); // ← НОВЫЙ ИНДЕКС ДЛЯ АНАЛИТИКИ
+            },
+          ),
+
+          ListTile(
+            leading: const Icon(Icons.calendar_month),
+            title: const Text('Календарь'),
+            onTap: () {
+              Navigator.pop(context);
+              tabController.animateTo(3);
+            },
+          ),
+
+          const Divider(),
+
+          // ДОПОЛНИТЕЛЬНЫЕ ЭКРАНЫ
+          ListTile(
+            leading: const Icon(Icons.calendar_today),
+            title: const Text('Планирование'),
+            subtitle: const Text('Список запланированных задач'),
+            onTap: () {
+              Navigator.pop(context);
+
+              // Открываем экран планирования как отдельную страницу
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => PlanningCalendarScreen(
+                    currentUser: currentUser,
+                    onItemCompleted: onItemCompletedFromPlanning,
+                  ),
+                ),
+              );
+            },
+          ),
+
+          // Можно добавить другие дополнительные экраны здесь
+          /*
+          ListTile(
+            leading: Icon(Icons.settings),
+            title: Text('Настройки'),
+            onTap: () {
+              Navigator.pop(context);
+              // Открыть экран настроек
+            },
+          ),
+          */
         ],
       ),
     );

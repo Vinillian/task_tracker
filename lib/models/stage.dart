@@ -25,10 +25,10 @@ class Stage {
   @HiveField(5)
   final List<Step> steps;
 
-  @HiveField(6) // Следующий доступный номер
+  @HiveField(6)
   final DateTime? plannedDate;
 
-  @HiveField(7) // Следующий доступный номер
+  @HiveField(7)
   final Recurrence? recurrence;
 
   Stage({
@@ -38,8 +38,8 @@ class Stage {
     this.stageType = 'stepByStep',
     this.isCompleted = false,
     List<Step>? steps,
-    this.plannedDate, // Добавлено
-    this.recurrence, // Добавлено
+    this.plannedDate,
+    this.recurrence,
   }) : steps = steps ?? [];
 
   Map<String, dynamic> toFirestore() {

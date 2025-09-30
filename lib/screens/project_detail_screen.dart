@@ -93,9 +93,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: ProgressUtils.getTaskColor(progress).withOpacity(0.2),
+          color: task.color.withOpacity(0.2),
           shape: BoxShape.circle,
-          border: Border.all(color: ProgressUtils.getTaskColor(progress)),
+          border: Border.all(color: task.color),
         ),
         child: Center(
           child: Text(
@@ -103,7 +103,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.bold,
-              color: ProgressUtils.getTaskColor(progress),
+              color: task.color,
             ),
           ),
         ),

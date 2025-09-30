@@ -25,6 +25,12 @@ void main() async {
   runApp(MyApp(localRepository: localRepository));
 }
 
+class CalendarRefresh extends ChangeNotifier {
+  void refresh() {
+    notifyListeners();
+  }
+}
+
 class MyApp extends StatelessWidget {
   final LocalRepository localRepository;
 
@@ -37,6 +43,7 @@ class MyApp extends StatelessWidget {
         Provider<LocalRepository>(create: (_) => localRepository),
         Provider<AuthService>(create: (_) => AuthService()),
         Provider<FirestoreService>(create: (_) => FirestoreService()),
+        ChangeNotifierProvider(create: (_) => CalendarRefresh()),
       ],
       child: MaterialApp(
         title: 'Task Tracker',
@@ -69,4 +76,5 @@ class AuthWrapper extends StatelessWidget {
       },
     );
   }
+
 }

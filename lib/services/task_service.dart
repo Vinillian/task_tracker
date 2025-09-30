@@ -13,6 +13,7 @@ class TaskService {
     Recurrence? recurrence,
     DateTime? dueDate,
     String? description,
+    int colorValue = 0xFF2196F3, // Цвет по умолчанию
   }) {
     return Task(
       name: name,
@@ -137,8 +138,8 @@ class TaskService {
     );
   }
 
-  // Обновление задачи
-  static Task updateTask(Task oldTask, String name, int steps) {
+  // Обновление задачи с сохранением цвета
+  static Task updateTask(Task oldTask, String name, int steps, {int? colorValue}) {
     return Task(
       name: name,
       completedSteps: oldTask.completedSteps.clamp(0, steps),
@@ -149,6 +150,7 @@ class TaskService {
       dueDate: oldTask.dueDate,
       isCompleted: oldTask.isCompleted,
       description: oldTask.description,
+      colorValue: colorValue ?? oldTask.colorValue, // Сохраняем цвет
     );
   }
 
