@@ -1,355 +1,401 @@
 import 'package:flutter/material.dart';
-import 'package:table_calendar/table_calendar.dart';
-import 'package:provider/provider.dart';
-import '../main.dart';
-import '../models/app_user.dart';
 import '../models/task.dart';
-import '../models/stage.dart';
-import '../models/step.dart' as custom_step;
-import '../widgets/detailed_completion_dialog.dart';
-import '../services/recurrence_service.dart';
-import '../services/recurrence_completion_service.dart';
-import '../repositories/local_repository.dart';
-
-
+import '../models/project.dart';
+import '../services/task_service.dart';
+import '../services/completion_service.dart';
+import '../widgets/task_list_item.dart';
 
 class CalendarScreen extends StatefulWidget {
-  final AppUser? currentUser;
-  final Function(Map<String, dynamic>) onItemCompleted;
+  final List<Project> projects;
 
-  const CalendarScreen({
-    super.key,
-    required this.currentUser,
-    required this.onItemCompleted,
-  });
+  const CalendarScreen({Key? key, required this.projects}) : super(key: key);
 
   @override
-  State<CalendarScreen> createState() => _CalendarScreenState();
+  _CalendarScreenState createState() => _CalendarScreenState();
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
-  CalendarFormat _calendarFormat = CalendarFormat.month;
-  DateTime _focusedDay = DateTime.now();
-  DateTime? _selectedDay = DateTime.now();
+  late TaskService _taskService;
+  late CompletionService _completionService;
+  DateTime _selectedDate = DateTime.now();
 
+  // Для группировки задач по датам
+  Map<DateTime, List<Task>> _tasksByDate = {};
 
-  /// Построение списка задач
-  Future<Map<DateTime, List<Map<String, dynamic>>>> _getPlannedItems() async {
-    final plannedItems = <DateTime, List<Map<String, dynamic>>>{};
+  @override
+  void initState() {
+    super.initState();
+    _completionService = CompletionService();
+    _taskService = TaskService(_completionService);
+    _groupTasksByDate();
+  }
 
-    if (widget.currentUser == null) return plannedItems;
+  @override
+  void didUpdateWidget(CalendarScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.projects != oldWidget.projects) {
+      _groupTasksByDate();
+    }
+  }
 
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+  // Группируем все задачи по датам (включая подзадачи)
+  void _groupTasksByDate() {
+    _tasksByDate = {};
 
-    for (final project in widget.currentUser!.projects) {
-      for (final task in project.tasks) {
-        // Recurring задачи
-        if (task.recurrence != null && task.plannedDate != null) {
-          final occurrences = RecurrenceService.generateOccurrences(
-            recurrence: task.recurrence!,
-            startDate: task.plannedDate!,
-            untilDate: DateTime.now().add(const Duration(days: 365)),
-          );
+    final allTasks = _getAllTasks();
 
-          for (final occurrence in occurrences) {
-            final date = DateTime(occurrence.year, occurrence.month, occurrence.day);
+    for (final task in allTasks) {
+      // Для задач с dueDate
+      if (task.dueDate != null) {
+        final date = DateTime(task.dueDate!.year, task.dueDate!.month, task.dueDate!.day);
+        _tasksByDate.putIfAbsent(date, () => []).add(task);
+      }
 
-            if (date.isAfter(today.subtract(const Duration(days: 1))) || isSameDay(date, today)) {
-              final isCompleted = await _isOccurrenceCompleted(task, occurrence);
-              plannedItems.putIfAbsent(date, () => []).add({
-                'type': 'task',
-                'item': task,
-                'project': project,
-                'name': task.name,
-                'isRecurring': true,
-                'occurrenceDate': occurrence,
-                'isCompleted': isCompleted,
-                'originalPlannedDate': task.plannedDate,
-              });
-            }
-          }
-        }
-        // Non-recurring задачи
-        else if (task.plannedDate != null && task.recurrence == null && !task.isCompleted) {
-          final date = DateTime(task.plannedDate!.year, task.plannedDate!.month, task.plannedDate!.day);
-          if (!date.isBefore(today)) {
-            plannedItems.putIfAbsent(date, () => []).add({
-              'type': 'task',
-              'item': task,
-              'project': project,
-              'name': task.name,
-              'isRecurring': false,
-              'isCompleted': task.isCompleted,
-              'taskType': task.taskType,
-            });
-          }
-        }
-
-        // Этапы
-        for (final stage in task.stages) {
-          if (stage.recurrence != null && stage.plannedDate != null) {
-            final occurrences = RecurrenceService.generateOccurrences(
-              recurrence: stage.recurrence!,
-              startDate: stage.plannedDate!,
-              untilDate: DateTime.now().add(const Duration(days: 365)),
-            );
-
-            for (final occurrence in occurrences) {
-              final date = DateTime(occurrence.year, occurrence.month, occurrence.day);
-
-              if (date.isAfter(today.subtract(const Duration(days: 1))) || isSameDay(date, today)) {
-                final isCompleted = await _isOccurrenceCompletedForStage(stage, occurrence);
-                plannedItems.putIfAbsent(date, () => []).add({
-                  'type': 'stage',
-                  'item': stage,
-                  'project': project,
-                  'task': task,
-                  'name': stage.name,
-                  'isRecurring': true,
-                  'occurrenceDate': occurrence,
-                  'isCompleted': isCompleted,
-                  'originalPlannedDate': stage.plannedDate,
-                });
-              }
-            }
-          } else if (stage.plannedDate != null && stage.recurrence == null && !stage.isCompleted) {
-            final date = DateTime(stage.plannedDate!.year, stage.plannedDate!.month, stage.plannedDate!.day);
-            if (!date.isBefore(today)) {
-              plannedItems.putIfAbsent(date, () => []).add({
-                'type': 'stage',
-                'item': stage,
-                'project': project,
-                'task': task,
-                'name': stage.name,
-                'isRecurring': false,
-                'isCompleted': stage.isCompleted,
-              });
-            }
-          }
-
-          // Шаги
-          for (final step in stage.steps) {
-            if (step.recurrence != null && step.plannedDate != null) {
-              final occurrences = RecurrenceService.generateOccurrences(
-                recurrence: step.recurrence!,
-                startDate: step.plannedDate!,
-                untilDate: DateTime.now().add(const Duration(days: 365)),
-              );
-
-              for (final occurrence in occurrences) {
-                final date = DateTime(occurrence.year, occurrence.month, occurrence.day);
-
-                if (date.isAfter(today.subtract(const Duration(days: 1))) || isSameDay(date, today)) {
-                  final isCompleted = await _isOccurrenceCompletedForStep(step, occurrence);
-                  plannedItems.putIfAbsent(date, () => []).add({
-                    'type': 'step',
-                    'item': step,
-                    'project': project,
-                    'task': task,
-                    'stage': stage,
-                    'name': step.name,
-                    'isRecurring': true,
-                    'occurrenceDate': occurrence,
-                    'isCompleted': isCompleted,
-                    'originalPlannedDate': step.plannedDate,
-                  });
-                }
-              }
-            } else if (step.plannedDate != null && step.recurrence == null && !step.isCompleted) {
-              final date = DateTime(step.plannedDate!.year, step.plannedDate!.month, step.plannedDate!.day);
-              if (!date.isBefore(today)) {
-                plannedItems.putIfAbsent(date, () => []).add({
-                  'type': 'step',
-                  'item': step,
-                  'project': project,
-                  'task': task,
-                  'stage': stage,
-                  'name': step.name,
-                  'isRecurring': false,
-                  'isCompleted': step.isCompleted,
-                });
-              }
-            }
-          }
-        }
+      // Для повторяющихся задач - добавляем на сегодня если нужно
+      if (task.type.isRecurring && _isTaskDueToday(task)) {
+        final today = DateTime.now();
+        final date = DateTime(today.year, today.month, today.day);
+        _tasksByDate.putIfAbsent(date, () => []).add(task);
       }
     }
 
-    return plannedItems;
-  }
-
-  Future<bool> _isOccurrenceCompleted(Task task, DateTime occurrenceDate) async {
-    if (task.recurrence != null) {
-      return await RecurrenceCompletionService.isOccurrenceCompleted(task, occurrenceDate, context);
-    }
-    final today = DateTime.now();
-    return isSameDay(occurrenceDate, DateTime(today.year, today.month, today.day)) && task.isCompleted;
-  }
-
-  Future<bool> _isOccurrenceCompletedForStage(Stage stage, DateTime occurrenceDate) async {
-    final today = DateTime.now();
-    return isSameDay(occurrenceDate, DateTime(today.year, today.month, today.day)) && stage.isCompleted;
-  }
-
-  Future<bool> _isOccurrenceCompletedForStep(custom_step.Step step, DateTime occurrenceDate) async {
-    final today = DateTime.now();
-    return isSameDay(occurrenceDate, DateTime(today.year, today.month, today.day)) && step.isCompleted;
-  }
-
-
-  Future<void> _handleItemCompletion(Map<String, dynamic> completionResult) async {
-    final item = completionResult['item'];
-    final occurrenceDate = completionResult['occurrenceDate'] as DateTime?;
-    final isRecurring = completionResult['isRecurring'] == true;
-
-    if (item is Task) {
-      if (isRecurring && occurrenceDate != null) {
-        // Повторяющаяся задача
-        if (await RecurrenceCompletionService.isOccurrenceCompleted(item, occurrenceDate, context)) {
-          await RecurrenceCompletionService.unmarkOccurrenceCompleted(item, occurrenceDate, context);
-        } else {
-          await RecurrenceCompletionService.markOccurrenceCompleted(item, occurrenceDate, context);
-        }
-      } else {
-        // 🔹 НЕ повторяющаяся задача (singleStep или stepByStep)
-        final updatedTask = item.copyWith(isCompleted: !item.isCompleted);
-        // теперь нужно заменить задачу в проекте на обновлённую
-        final project = completionResult['project'];
-        final index = project.tasks.indexWhere((t) => t.id == item.id);
-        if (index != -1) {
-          project.tasks[index] = updatedTask;
-        }
-
-      }
-    }
-
-    // Сохраняем пользователя после изменений
-    try {
-      final localRepo = Provider.of<LocalRepository>(context, listen: false);
-      final currentUser = localRepo.loadUser();
-      if (currentUser != null) {
-        await localRepo.saveUser(currentUser);
-      }
-    } catch (e) {
-      debugPrint('❌ Ошибка сохранения после отметки: $e');
-    }
-
-    widget.onItemCompleted(completionResult);
-
-    // Обновляем UI
     setState(() {});
-    try {
-      Provider.of<CalendarRefresh>(context, listen: false).refresh();
-    } catch (_) {}
+  }
+
+  // Получаем все задачи из всех проектов (включая подзадачи)
+  List<Task> _getAllTasks() {
+    final allTasks = <Task>[];
+
+    for (final project in widget.projects) {
+      allTasks.addAll(project.allTasks);
+    }
+
+    return allTasks;
+  }
+
+  // Проверяем, должна ли повторяющаяся задача быть сегодня
+  bool _isTaskDueToday(Task task) {
+    // TODO: Реализовать логику для повторяющихся задач
+    // Пока просто показываем все повторяющиеся задачи
+    return task.type.isRecurring;
+  }
+
+  // Получаем задачи для выбранной даты
+  List<Task> _getTasksForSelectedDate() {
+    final dateKey = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    return _tasksByDate[dateKey] ?? [];
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Map<DateTime, List<Map<String, dynamic>>>>(
-      future: _getPlannedItems(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    final tasksForSelectedDate = _getTasksForSelectedDate();
 
-        final plannedItems = snapshot.data!;
-        final selectedItems = _selectedDay != null
-            ? plannedItems.entries
-            .where((entry) => isSameDay(entry.key, _selectedDay))
-            .expand((entry) => entry.value)
-            .toList()
-            : [];
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Календарь'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.today),
+            onPressed: () {
+              setState(() {
+                _selectedDate = DateTime.now();
+              });
+            },
+            tooltip: 'Сегодня',
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Календарь
+          _buildCalendar(),
+          // Список задач на выбранную дату
+          Expanded(
+            child: _buildTaskList(tasksForSelectedDate),
+          ),
+        ],
+      ),
+    );
+  }
 
-        return Scaffold(
-          body: Column(
-            children: [
-              TableCalendar(
-                firstDay: DateTime.now().subtract(const Duration(days: 365)),
-                lastDay: DateTime.now().add(const Duration(days: 365)),
-                focusedDay: _focusedDay,
-                calendarFormat: _calendarFormat,
-                eventLoader: (day) => plannedItems[day] ?? [],
-                selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                headerStyle: const HeaderStyle(
-                  formatButtonVisible: false,
-                  titleCentered: true,
-                ),
-                onDaySelected: (selectedDay, focusedDay) {
-                  setState(() {
-                    _selectedDay = selectedDay;
-                    _focusedDay = focusedDay;
-                  });
-                },
-                onPageChanged: (focusedDay) {
-                  _focusedDay = focusedDay;
-                },
-              ),
-              Expanded(
-                child: _selectedDay == null
-                    ? const Center(child: Text('Выберите день для просмотра задач'))
-                    : ListView.builder(
-                  itemCount: selectedItems.length,
-                  itemBuilder: (context, index) {
-                    final item = selectedItems[index];
-                    final isCompleted = item['isCompleted'] == true;
-                    final isRecurring = item['isRecurring'] == true;
-                    final occurrenceDate = item['occurrenceDate'];
-
-                    final bool canComplete = isRecurring
-                        ? isSameDay(occurrenceDate, DateTime.now()) && !isCompleted
-                        : !isCompleted;
-
-                    return ListTile(
-                      leading: Icon(
-                        item['type'] == 'task'
-                            ? Icons.task
-                            : item['type'] == 'stage'
-                            ? Icons.album
-                            : Icons.star,
-                        color: canComplete ? Colors.blue : Colors.grey,
-                      ),
-                      title: Text(
-                        item['name'],
-                        style: TextStyle(
-                          decoration: isCompleted
-                              ? TextDecoration.lineThrough
-                              : TextDecoration.none,
-                        ),
-                      ),
-                      subtitle: Text('Тип: ${item['type']}'),
-                      trailing: IconButton(
-                        icon: Icon(Icons.check,
-                            color: canComplete ? Colors.green : Colors.grey),
-                        onPressed: canComplete
-                            ? () => _showCompletionDialog(context, item)
-                            : null,
-                      ),
-                    );
+  Widget _buildCalendar() {
+    return Card(
+      margin: EdgeInsets.all(16),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          children: [
+            // Заголовок месяца и года
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.chevron_left),
+                  onPressed: () {
+                    setState(() {
+                      _selectedDate = DateTime(_selectedDate.year, _selectedDate.month - 1);
+                    });
                   },
                 ),
+                Text(
+                  '${_getMonthName(_selectedDate.month)} ${_selectedDate.year}',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                IconButton(
+                  icon: Icon(Icons.chevron_right),
+                  onPressed: () {
+                    setState(() {
+                      _selectedDate = DateTime(_selectedDate.year, _selectedDate.month + 1);
+                    });
+                  },
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            // Сетка календаря
+            _buildCalendarGrid(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCalendarGrid() {
+    final firstDayOfMonth = DateTime(_selectedDate.year, _selectedDate.month, 1);
+    final lastDayOfMonth = DateTime(_selectedDate.year, _selectedDate.month + 1, 0);
+    final daysInMonth = lastDayOfMonth.day;
+
+    // День недели первого дня месяца (0 - воскресенье, 1 - понедельник, etc.)
+    final firstWeekday = firstDayOfMonth.weekday;
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 7,
+        childAspectRatio: 1.0,
+      ),
+      itemCount: daysInMonth + firstWeekday - 1,
+      itemBuilder: (context, index) {
+        if (index < firstWeekday - 1) {
+          // Пустые ячейки перед первым днем месяца
+          return SizedBox.shrink();
+        }
+
+        final day = index - firstWeekday + 2;
+        final currentDate = DateTime(_selectedDate.year, _selectedDate.month, day);
+        final isSelected = _isSameDay(currentDate, _selectedDate);
+        final hasTasks = _tasksByDate.containsKey(DateTime(currentDate.year, currentDate.month, currentDate.day));
+        final isToday = _isSameDay(currentDate, DateTime.now());
+
+        return GestureDetector(
+          onTap: () {
+            setState(() {
+              _selectedDate = currentDate;
+            });
+          },
+          child: Container(
+            margin: EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? Colors.blue
+                  : isToday
+                  ? Colors.blue.shade50
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isToday ? Colors.blue : Colors.transparent,
               ),
-            ],
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '$day',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: isSelected ? Colors.white : Colors.black,
+                  ),
+                ),
+                if (hasTasks)
+                  Container(
+                    margin: EdgeInsets.only(top: 2),
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.white : Colors.blue,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+              ],
+            ),
           ),
         );
       },
     );
   }
 
-  void _showCompletionDialog(BuildContext context, Map<String, dynamic> itemData) {
+  Widget _buildTaskList(List<Task> tasks) {
+    if (tasks.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.task_outlined, size: 64, color: Colors.grey.shade300),
+            SizedBox(height: 16),
+            Text(
+              'Нет задач на ${_selectedDate.day}.${_selectedDate.month}.${_selectedDate.year}',
+              style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: EdgeInsets.all(8),
+      itemCount: tasks.length,
+      itemBuilder: (context, index) {
+        final task = tasks[index];
+        return TaskListItem(
+          task: task,
+          nestingLevel: task.nestingLevel,
+          onTap: () => _showTaskDetails(task),
+          onComplete: () => _toggleTaskCompletion(task),
+          onAddSubtask: task.canAddSubtask() ? () => _showAddSubtaskDialog(task) : null,
+          onEdit: () => _showEditTaskDialog(task),
+          onDelete: () => _deleteTask(task),
+          isSelected: false,
+        );
+      },
+    );
+  }
+
+  // === ОБРАБОТЧИКИ СОБЫТИЙ ===
+
+  void _toggleTaskCompletion(Task task) {
+    setState(() {
+      final updatedTask = task.isCompleted
+          ? _taskService.uncompleteTask(task)
+          : _taskService.completeTask(task);
+
+      // Находим и обновляем задачу в проекте
+      for (final project in widget.projects) {
+        final projectTask = project.getTaskById(task.id);
+        if (projectTask != null) {
+          // TODO: Обновить проект в репозитории
+          break;
+        }
+      }
+
+      _groupTasksByDate(); // Перегруппируем задачи
+    });
+  }
+
+  void _showTaskDetails(Task task) {
     showDialog(
       context: context,
-      builder: (context) => DetailedCompletionDialog(
-        item: itemData['item'],
-        project: itemData['project'],
-        task: itemData['task'],
-        stage: itemData['stage'],
-        occurrenceDate: itemData['occurrenceDate'],
+      builder: (context) => AlertDialog(
+        title: Text(task.title),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (task.description != null) ...[
+                Text(task.description!),
+                SizedBox(height: 16),
+              ],
+              _buildTaskInfoRow(Icons.assignment, 'Тип', task.type.displayName),
+              _buildTaskInfoRow(Icons.flag, 'Приоритет', '${task.priority}'),
+              if (task.dueDate != null)
+                _buildTaskInfoRow(
+                    Icons.calendar_today,
+                    'Срок',
+                    '${task.dueDate!.day}.${task.dueDate!.month}.${task.dueDate!.year}'
+                ),
+              _buildTaskInfoRow(Icons.timer, 'Оценка времени', '${task.estimatedMinutes} мин'),
+              if (task.hasSubtasks)
+                _buildTaskInfoRow(Icons.account_tree, 'Подзадачи', '${task.completedSubtasks}/${task.totalSubtasks}'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Закрыть'),
+          ),
+        ],
       ),
-    ).then((result) {
-      if (result != null) {
-        _handleItemCompletion(result);
-      }
-    });
+    );
+  }
+
+  Widget _buildTaskInfoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.grey.shade600),
+          SizedBox(width: 8),
+          Text('$label: ', style: TextStyle(fontWeight: FontWeight.w500)),
+          Text(value),
+        ],
+      ),
+    );
+  }
+
+  void _showAddSubtaskDialog(Task task) {
+    // TODO: Реализовать диалог добавления подзадачи
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Добавление подзадачи для: ${task.title}')),
+    );
+  }
+
+  void _showEditTaskDialog(Task task) {
+    // TODO: Реализовать диалог редактирования
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Редактирование: ${task.title}')),
+    );
+  }
+
+  void _deleteTask(Task task) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Удалить задачу?'),
+        content: Text('Задача "${task.title}" будет удалена${task.hasSubtasks ? ' вместе с подзадачами' : ''}.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // TODO: Удалить задачу из проекта
+              _groupTasksByDate();
+            },
+            child: Text('Удалить', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // === ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ===
+
+  bool _isSameDay(DateTime date1, DateTime date2) {
+    return date1.year == date2.year &&
+        date1.month == date2.month &&
+        date1.day == date2.day;
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+      'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+    ];
+    return months[month - 1];
   }
 }

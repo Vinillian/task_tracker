@@ -1,410 +1,445 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../models/task.dart';
-import '../models/recurrence.dart';
-
+import '../models/task_type.dart';
 
 class TaskEditDialog extends StatefulWidget {
-  final Task? initialTask;
-  final Function(Task) onSave;
+  final String projectId;
+  final Task? task;
+  final Task? parentTask;
+  final int nestingLevel;
 
   const TaskEditDialog({
-    super.key,
-    this.initialTask,
-    required this.onSave,
-  });
+    Key? key,
+    required this.projectId,
+    this.task,
+    this.parentTask,
+    required this.nestingLevel,
+  }) : super(key: key);
 
   @override
-  State<TaskEditDialog> createState() => _TaskEditDialogState();
+  _TaskEditDialogState createState() => _TaskEditDialogState();
 }
 
 class _TaskEditDialogState extends State<TaskEditDialog> {
-  final _nameController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _stepsController = TextEditingController();
-  String _selectedTaskType = 'stepByStep';
-  Recurrence? _recurrence;
-  DateTime? _dueDate;
-  DateTime? _plannedDate;
-  int _selectedColor = 0xFF2196F3;
+  final _estimatedMinutesController = TextEditingController();
 
-  // Новые переменные для повторения
-  RecurrenceType? _selectedRecurrenceType;
-  int _recurrenceInterval = 1;
-  List<int> _selectedDaysOfWeek = [];
+  TaskType _selectedType = TaskType.single;
+  int _selectedPriority = 1;
+  DateTime? _selectedDueDate;
 
   @override
   void initState() {
     super.initState();
-    if (widget.initialTask != null) {
-      _nameController.text = widget.initialTask!.name;
-      _descriptionController.text = widget.initialTask!.description ?? '';
-      _stepsController.text = widget.initialTask!.totalSteps.toString();
-      _selectedTaskType = widget.initialTask!.taskType;
-      _recurrence = widget.initialTask!.recurrence;
-      _dueDate = widget.initialTask!.dueDate;
-      _plannedDate = widget.initialTask!.plannedDate;
-      _selectedColor = widget.initialTask!.colorValue ?? 0xFF2196F3;
 
-      // Инициализация параметров повторения
-      if (_recurrence != null) {
-        _selectedRecurrenceType = _recurrence!.type;
-        _recurrenceInterval = _recurrence!.interval;
-        _selectedDaysOfWeek = List.from(_recurrence!.daysOfWeek);
-      }
+    // Заполняем поля если редактируем существующую задачу
+    if (widget.task != null) {
+      _titleController.text = widget.task!.title;
+      _descriptionController.text = widget.task!.description ?? '';
+      _selectedType = widget.task!.type;
+      _selectedPriority = widget.task!.priority;
+      _selectedDueDate = widget.task!.dueDate;
+      _estimatedMinutesController.text = widget.task!.estimatedMinutes.toString();
     } else {
-      _stepsController.text = '1';
+      // Для новой задачи устанавливаем тип по умолчанию
+      _selectedType = widget.nestingLevel > 0 ? TaskType.single : TaskType.single;
     }
   }
 
   @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _estimatedMinutesController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isEditing = widget.task != null;
+    final canChangeType = !isEditing || widget.task!.subtasks.isEmpty;
+
     return AlertDialog(
-      title: Text(widget.initialTask == null ? "Создать задачу" : "Редактировать задачу"),
+      title: Text(isEditing ? 'Редактировать задачу' :
+      widget.parentTask != null ? 'Добавить подзадачу' : 'Новая задача'),
       content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(labelText: "Название задачи"),
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              value: _selectedTaskType,
-              items: const [
-                DropdownMenuItem(value: "singleStep", child: Text("Одиночная")),
-                DropdownMenuItem(value: "stepByStep", child: Text("Пошаговая")),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Индикатор вложенности
+              if (widget.nestingLevel > 0) ...[
+                _buildNestingInfo(),
+                SizedBox(height: 16),
               ],
-              onChanged: (val) {
-                setState(() {
-                  _selectedTaskType = val!;
-                });
-              },
-              decoration: const InputDecoration(labelText: "Тип задачи"),
-            ),
-            if (_selectedTaskType == "stepByStep")
+
+              // Поле названия
               TextFormField(
-                controller: _stepsController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: "Количество шагов"),
+                controller: _titleController,
+                decoration: InputDecoration(
+                  labelText: 'Название задачи',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Введите название задачи';
+                  }
+                  return null;
+                },
               ),
-            TextFormField(
-              controller: _descriptionController,
-              decoration: const InputDecoration(labelText: "Описание"),
-              maxLines: 2,
-            ),
-            const SizedBox(height: 16),
-            _buildColorPicker(),
-            const SizedBox(height: 16),
+              SizedBox(height: 16),
 
-            // НОВОЕ: Выбор повторения
-            _buildRecurrenceSection(),
-            const SizedBox(height: 16),
+              // Поле описания
+              TextFormField(
+                controller: _descriptionController,
+                decoration: InputDecoration(
+                  labelText: 'Описание (необязательно)',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+              SizedBox(height: 16),
 
-            ListTile(
-              title: Text(_dueDate == null
-                  ? 'Установить срок'
-                  : 'Срок: ${DateFormat('dd.MM.yyyy').format(_dueDate!)}'),
-              trailing: const Icon(Icons.event),
-              onTap: () async {
-                final date = await showDatePicker(
-                  context: context,
-                  initialDate: _dueDate ?? DateTime.now(),
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime.now().add(const Duration(days: 365)),
-                );
-                if (date != null) {
-                  setState(() => _dueDate = date);
-                }
-              },
-            ),
-            ListTile(
-              title: Text(_plannedDate == null
-                  ? 'Запланировать дату выполнения'
-                  : 'Запланировано: ${DateFormat('dd.MM.yyyy').format(_plannedDate!)}'),
-              trailing: const Icon(Icons.calendar_today),
-              onTap: () async {
-                final date = await showDatePicker(
-                  context: context,
-                  initialDate: _plannedDate ?? _dueDate ?? DateTime.now(),
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime.now().add(const Duration(days: 365)),
-                );
-                if (date != null) {
-                  setState(() => _plannedDate = date);
-                }
-              },
-            ),
-          ],
+              // Тип задачи (только если можно менять)
+              if (canChangeType) ...[
+                _buildTaskTypeSelector(),
+                SizedBox(height: 16),
+              ] else ...[
+                _buildTaskTypeDisplay(),
+                SizedBox(height: 16),
+              ],
+
+              // Приоритет
+              _buildPrioritySelector(),
+              SizedBox(height: 16),
+
+              // Дата выполнения
+              _buildDueDateSelector(),
+              SizedBox(height: 16),
+
+              // Оценка времени
+              TextFormField(
+                controller: _estimatedMinutesController,
+                decoration: InputDecoration(
+                  labelText: 'Оценка времени (минуты)',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value != null && value.isNotEmpty) {
+                    final minutes = int.tryParse(value);
+                    if (minutes == null || minutes < 0) {
+                      return 'Введите корректное число';
+                    }
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("Отмена"),
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('Отмена'),
         ),
         ElevatedButton(
           onPressed: _saveTask,
-          child: const Text("Сохранить"),
+          child: Text(isEditing ? 'Сохранить' : 'Создать'),
         ),
       ],
     );
   }
 
-  Widget _buildRecurrenceSection() {
+  Widget _buildNestingInfo() {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.shade100),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.account_tree, size: 20, color: Colors.blue),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              widget.parentTask != null
+                  ? 'Подзадача для: ${widget.parentTask!.title}'
+                  : 'Уровень вложенности: ${widget.nestingLevel + 1}',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.blue.shade800,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaskTypeSelector() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Повторение", style: TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<RecurrenceType>(
-          value: _selectedRecurrenceType,
-          items: RecurrenceType.values.map((type) {
+        Text(
+          'Тип задачи',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        SizedBox(height: 8),
+        DropdownButtonFormField<TaskType>(
+          value: _selectedType,
+          items: TaskType.values.map((type) {
             return DropdownMenuItem(
               value: type,
-              child: Text(_getRecurrenceTypeName(type)),
+              child: Row(
+                children: [
+                  _getTaskTypeIcon(type),
+                  SizedBox(width: 8),
+                  Text(type.displayName),
+                ],
+              ),
             );
           }).toList(),
-          onChanged: (type) {
-            setState(() {
-              _selectedRecurrenceType = type;
-              _updateRecurrence();
-            });
+          onChanged: (TaskType? newValue) {
+            if (newValue != null) {
+              setState(() {
+                _selectedType = newValue;
+              });
+            }
           },
-          decoration: const InputDecoration(
-            labelText: "Тип повторения",
+          decoration: InputDecoration(
             border: OutlineInputBorder(),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
         ),
-
-        if (_selectedRecurrenceType != null) ...[
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Text("Интервал:"),
-              const SizedBox(width: 8),
-              DropdownButton<int>(
-                value: _recurrenceInterval,
-                items: [1, 2, 3, 4, 5, 6, 7].map((interval) {
-                  return DropdownMenuItem(
-                    value: interval,
-                    child: Text('$interval'),
-                  );
-                }).toList(),
-                onChanged: (interval) {
-                  setState(() {
-                    _recurrenceInterval = interval!;
-                    _updateRecurrence();
-                  });
-                },
-              ),
-              const SizedBox(width: 16),
-              Text(_getRecurrenceDescription()),
-            ],
-          ),
-        ],
-
-        if (_selectedRecurrenceType == RecurrenceType.custom) ...[
-          const SizedBox(height: 12),
-          const Text("Дни недели:"),
-          Wrap(
-            spacing: 8,
-            children: [
-              for (int day = 1; day <= 7; day++)
-                FilterChip(
-                  label: Text(_getDayName(day)),
-                  selected: _selectedDaysOfWeek.contains(day),
-                  onSelected: (selected) {
-                    setState(() {
-                      if (selected) {
-                        _selectedDaysOfWeek.add(day);
-                      } else {
-                        _selectedDaysOfWeek.remove(day);
-                      }
-                      _updateRecurrence();
-                    });
-                  },
-                ),
-            ],
-          ),
-        ],
-
-        if (_recurrence != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            "Текущее правило: ${_recurrence!.displayText}",
-            style: TextStyle(color: Colors.green[700], fontSize: 12),
-          ),
-        ],
+        SizedBox(height: 4),
+        Text(
+          _selectedType.description,
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+        ),
       ],
     );
   }
 
-  String _getRecurrenceTypeName(RecurrenceType type) {
-    switch (type) {
-      case RecurrenceType.daily: return 'Ежедневно';
-      case RecurrenceType.weekly: return 'Еженедельно';
-      case RecurrenceType.monthly: return 'Ежемесячно';
-      case RecurrenceType.yearly: return 'Ежегодно';
-      case RecurrenceType.custom: return 'По дням недели';
-    }
-  }
-
-  String _getRecurrenceDescription() {
-    if (_selectedRecurrenceType == null) return '';
-
-    switch (_selectedRecurrenceType!) {
-      case RecurrenceType.daily:
-        return _recurrenceInterval == 1 ? 'каждый день' : 'каждые $_recurrenceInterval дней';
-      case RecurrenceType.weekly:
-        return _recurrenceInterval == 1 ? 'каждую неделю' : 'каждые $_recurrenceInterval недель';
-      case RecurrenceType.monthly:
-        return _recurrenceInterval == 1 ? 'каждый месяц' : 'каждые $_recurrenceInterval месяцев';
-      case RecurrenceType.yearly:
-        return _recurrenceInterval == 1 ? 'каждый год' : 'каждые $_recurrenceInterval лет';
-      case RecurrenceType.custom:
-        return 'по выбранным дням';
-    }
-  }
-
-  String _getDayName(int day) {
-    switch (day) {
-      case 1: return 'Пн';
-      case 2: return 'Вт';
-      case 3: return 'Ср';
-      case 4: return 'Чт';
-      case 5: return 'Пт';
-      case 6: return 'Сб';
-      case 7: return 'Вс';
-      default: return '';
-    }
-  }
-
-  void _updateRecurrence() {
-    if (_selectedRecurrenceType == null) {
-      _recurrence = null;
-      return;
-    }
-
-    _recurrence = Recurrence(
-      type: _selectedRecurrenceType!,
-      interval: _recurrenceInterval,
-      daysOfWeek: _selectedRecurrenceType == RecurrenceType.custom
-          ? _selectedDaysOfWeek
-          : [],
+  Widget _buildTaskTypeDisplay() {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          _getTaskTypeIcon(widget.task!.type),
+          SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Тип задачи: ${widget.task!.type.displayName}',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                Text(
+                  'Нельзя изменить тип задачи с подзадачами',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  bool _isColorPickerExpanded = false;
-
-  Widget _buildColorPicker() {
-    final colorMatrix = [
-      [0xFF2196F3, 0xFF03A9F4, 0xFF00BCD4, 0xFF009688, 0xFF4CAF50, 0xFF8BC34A],
-      [0xFFCDDC39, 0xFFFFC107, 0xFFFF9800, 0xFFFF5722, 0xFFF44336, 0xFFE91E63],
-      [0xFF9C27B0, 0xFF673AB7, 0xFF3F51B5, 0xFF607D8B, 0xFF9E9E9E, 0xFF795548],
-    ];
-
+  Widget _buildPrioritySelector() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 8),
-        if (_isColorPickerExpanded) ...[
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-            child: Column(
-              children: colorMatrix.map((row) {
-                return Row(
-                  children: row.map((colorValue) {
-                    return Expanded(
-                      child: Container(
-                        height: 22,
-                        margin: const EdgeInsets.all(0.5),
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _selectedColor = colorValue;
-                              _isColorPickerExpanded = false;
-                            });
-                          },
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Color(colorValue),
-                              borderRadius: BorderRadius.circular(2),
-                              border: Border.all(
-                                color: _selectedColor == colorValue
-                                    ? Colors.black
-                                    : Colors.transparent,
-                                width: _selectedColor == colorValue ? 2 : 0,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                );
-              }).toList(),
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-        Row(
-          children: [
-            GestureDetector(
-              onTap: () {
-                setState(() {
-                  _isColorPickerExpanded = !_isColorPickerExpanded;
-                });
-              },
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Color(_selectedColor),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.black, width: 2),
-                ),
+        Text(
+          'Приоритет',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        SizedBox(height: 8),
+        DropdownButtonFormField<int>(
+          value: _selectedPriority,
+          items: [1, 2, 3, 4, 5].map((priority) {
+            return DropdownMenuItem(
+              value: priority,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.flag,
+                    color: _getPriorityColor(priority),
+                  ),
+                  SizedBox(width: 8),
+                  Text('Приоритет $priority'),
+                ],
               ),
-            ),
-            const SizedBox(width: 12),
-            const Text("Цвет задачи"),
-          ],
+            );
+          }).toList(),
+          onChanged: (int? newValue) {
+            if (newValue != null) {
+              setState(() {
+                _selectedPriority = newValue;
+              });
+            }
+          },
+          decoration: InputDecoration(
+            border: OutlineInputBorder(),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
         ),
       ],
     );
+  }
+
+  Widget _buildDueDateSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Срок выполнения',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        SizedBox(height: 8),
+        InkWell(
+          onTap: _selectDueDate,
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade400),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.calendar_today, size: 20, color: Colors.grey.shade600),
+                SizedBox(width: 8),
+                Text(
+                  _selectedDueDate != null
+                      ? '${_selectedDueDate!.day}.${_selectedDueDate!.month}.${_selectedDueDate!.year}'
+                      : 'Выберите дату (необязательно)',
+                  style: TextStyle(
+                    color: _selectedDueDate != null ? Colors.black : Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_selectedDueDate != null) ...[
+          SizedBox(height: 8),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                _selectedDueDate = null;
+              });
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade50,
+              foregroundColor: Colors.red,
+            ),
+            child: Text('Очистить дату'),
+          ),
+        ],
+      ],
+    );
+  }
+
+  void _selectDueDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDueDate ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+    );
+
+    if (picked != null && picked != _selectedDueDate) {
+      setState(() {
+        _selectedDueDate = picked;
+      });
+    }
   }
 
   void _saveTask() {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) return;
+    if (_formKey.currentState!.validate()) {
+      final task = _createTaskFromForm();
+      Navigator.of(context).pop(task);
+    }
+  }
 
-    final steps = _selectedTaskType == "stepByStep"
-        ? (int.tryParse(_stepsController.text) ?? 1)
-        : 1;
+  Task _createTaskFromForm() {
+    final now = DateTime.now();
 
-    final task = Task(
-      name: name,
-      totalSteps: steps,
-      completedSteps: widget.initialTask?.completedSteps ?? 0,
-      stages: widget.initialTask?.stages ?? [],
-      taskType: _selectedTaskType,
-      recurrence: _recurrence, // ← Теперь сохраняется повторение
-      dueDate: _dueDate,
-      isCompleted: widget.initialTask?.isCompleted ?? false,
-      description: _descriptionController.text.isEmpty
+    // Если редактируем существующую задачу
+    if (widget.task != null) {
+      return widget.task!.copyWith(
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim().isEmpty
+            ? null
+            : _descriptionController.text.trim(),
+        type: _selectedType,
+        priority: _selectedPriority,
+        dueDate: _selectedDueDate,
+        estimatedMinutes: int.tryParse(_estimatedMinutesController.text) ?? 0,
+      );
+    }
+
+    // Если создаем новую задачу
+    return Task(
+      id: 'task_${now.millisecondsSinceEpoch}',
+      title: _titleController.text.trim(),
+      description: _descriptionController.text.trim().isEmpty
           ? null
-          : _descriptionController.text,
-      plannedDate: _plannedDate,
-      colorValue: _selectedColor,
+          : _descriptionController.text.trim(),
+      isCompleted: false,
+      completedSubtasks: 0,
+      totalSubtasks: 0,
+      subtasks: [],
+      type: _selectedType,
+      priority: _selectedPriority,
+      dueDate: _selectedDueDate,
+      estimatedMinutes: int.tryParse(_estimatedMinutesController.text) ?? 0,
+      projectId: widget.projectId,
+      nestingLevel: widget.nestingLevel,
+      createdAt: now,
     );
+  }
 
-    widget.onSave(task);
-    Navigator.pop(context);
+  Icon _getTaskTypeIcon(TaskType type) {
+    switch (type) {
+      case TaskType.single:
+        return Icon(Icons.check_circle_outline, color: Colors.green);
+      case TaskType.multiStep:
+        return Icon(Icons.list_alt, color: Colors.blue);
+      case TaskType.recurring:
+        return Icon(Icons.repeat, color: Colors.orange);
+    }
+  }
+
+  Color _getPriorityColor(int priority) {
+    switch (priority) {
+      case 1:
+        return Colors.green;
+      case 2:
+        return Colors.blue;
+      case 3:
+        return Colors.orange;
+      case 4:
+        return Colors.red;
+      case 5:
+        return Colors.purple;
+      default:
+        return Colors.grey;
+    }
   }
 }

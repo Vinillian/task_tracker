@@ -1,67 +1,162 @@
+// lib/services/firestore_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/project.dart';
+import '../models/task.dart';
 import '../models/app_user.dart';
 
 class FirestoreService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  CollectionReference get _usersRef => _firestore.collection('users');
-
-  // Сохранить пользователя по UID
-  Future<void> saveUser(AppUser user, String uid) async {
-    try {
-      // Используем метод toFirestore() из модели AppUser
-      final userData = user.toFirestore();
-
-      await _usersRef.doc(uid).set(userData, SetOptions(merge: true));
-      print('✅ Пользователь ${user.username} сохранен в Firestore (UID: $uid)');
-      print('📊 Данные: ${userData.toString()}');
-    } catch (e) {
-      print('❌ Ошибка сохранения пользователя: $e');
-      rethrow;
-    }
+  // ========== USER METHODS ==========
+  Future<void> saveUser(AppUser user) {
+    return _db.collection('users').doc(user.id).set(user.toJson());
   }
 
-  // Получить документ пользователя по UID
-  Future<DocumentSnapshot> getUserDocument(String uid) async {
-    try {
-      final doc = await _usersRef.doc(uid).get();
-      print('📄 Загружен документ пользователя: ${doc.exists ? "существует" : "не существует"}');
-      return doc;
-    } catch (e) {
-      print('❌ Ошибка загрузки документа: $e');
-      rethrow;
-    }
-  }
-
-  // Stream для конкретного пользователя по UID
-  Stream<AppUser?> userStream(String uid) {
-    return _usersRef.doc(uid).snapshots().map((snapshot) {
+  Stream<AppUser?> userStream(String userId) {
+    return _db.collection('users').doc(userId).snapshots().map((snapshot) {
       if (snapshot.exists) {
-        print('🔄 Stream: данные пользователя обновлены');
-        return AppUser.fromFirestore(snapshot.data() as Map<String, dynamic>);
+        return AppUser.fromJson(snapshot.data()!);
       }
-      print('🔄 Stream: документ не существует');
       return null;
     });
   }
 
-  // Удалить пользователя по UID
-  Future<void> deleteUser(String uid) async {
-    try {
-      await _usersRef.doc(uid).delete();
-      print('Пользователь с UID: $uid удален из Firestore');
-    } catch (e) {
-      print('Ошибка удаления пользователя: $e');
-      rethrow;
+  Future<AppUser?> getUserDocument(String userId) async {
+    final doc = await _db.collection('users').doc(userId).get();
+    if (doc.exists) {
+      return AppUser.fromJson(doc.data()!);
     }
+    return null;
   }
 
-  // Старый метод для обратной совместимости
-  Stream<List<AppUser>> usersStream() {
-    return _usersRef.snapshots().map((snapshot) {
-      return snapshot.docs
-          .map((doc) => AppUser.fromFirestore(doc.data() as Map<String, dynamic>))
-          .toList();
-    });
+  // ========== PROJECT METHODS ==========
+  Stream<List<Project>> watchProjects() {
+    return _db.collection('projects').snapshots().map((snapshot) =>
+        snapshot.docs.map((doc) {
+          final project = Project.fromJson(doc.data());
+          return project.copyWith(id: doc.id);
+        }).toList());
+  }
+
+  Future<void> addProject(Project project) {
+    return _db.collection('projects').add(project.toJson());
+  }
+
+  Future<void> updateProject(Project project) {
+    return _db.collection('projects').doc(project.id).update(project.toJson());
+  }
+
+  Future<void> deleteProject(String projectId) async {
+    // Delete all project tasks first
+    final tasksSnapshot = await _db
+        .collection('projects')
+        .doc(projectId)
+        .collection('tasks')
+        .get();
+
+    final batch = _db.batch();
+    for (final doc in tasksSnapshot.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+
+    // Then delete the project
+    await _db.collection('projects').doc(projectId).delete();
+  }
+
+  // ========== TASK METHODS ==========
+  Stream<List<Task>> watchProjectTasks(String projectId) {
+    return _db
+        .collection('projects')
+        .doc(projectId)
+        .collection('tasks')
+        .where('parentTaskId', isEqualTo: null)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) {
+      final task = Task.fromJson(doc.data());
+      return task.copyWith(id: doc.id);
+    }).toList());
+  }
+
+  Stream<List<Task>> watchSubTasks(String projectId, String parentTaskId) {
+    return _db
+        .collection('projects')
+        .doc(projectId)
+        .collection('tasks')
+        .where('parentTaskId', isEqualTo: parentTaskId)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) {
+      final task = Task.fromJson(doc.data());
+      return task.copyWith(id: doc.id);
+    }).toList());
+  }
+
+  Stream<List<Task>> watchAllProjectTasks(String projectId) {
+    return _db
+        .collection('projects')
+        .doc(projectId)
+        .collection('tasks')
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) {
+      final task = Task.fromJson(doc.data());
+      return task.copyWith(id: doc.id);
+    }).toList());
+  }
+
+  Future<String> addTask(String projectId, Task task) async {
+    final docRef = await _db
+        .collection('projects')
+        .doc(projectId)
+        .collection('tasks')
+        .add(task.toJson());
+    return docRef.id;
+  }
+
+  Future<void> updateTask(String projectId, Task task) {
+    return _db
+        .collection('projects')
+        .doc(projectId)
+        .collection('tasks')
+        .doc(task.id)
+        .update(task.toJson());
+  }
+
+  Future<void> deleteTask(String projectId, String taskId) async {
+    final tasksRef = _db.collection('projects').doc(projectId).collection('tasks');
+
+    // Find all subtasks
+    final subTasksSnapshot = await tasksRef.where('parentTaskId', isEqualTo: taskId).get();
+
+    // Recursively delete subtasks
+    for (final doc in subTasksSnapshot.docs) {
+      await deleteTask(projectId, doc.id);
+    }
+
+    // Delete the task itself
+    await tasksRef.doc(taskId).delete();
+  }
+
+  Future<Task?> getTask(String projectId, String taskId) async {
+    final doc = await _db
+        .collection('projects')
+        .doc(projectId)
+        .collection('tasks')
+        .doc(taskId)
+        .get();
+
+    if (doc.exists) {
+      final task = Task.fromJson(doc.data()!);
+      return task.copyWith(id: doc.id);
+    }
+    return null;
+  }
+
+  Future<void> moveTask(String projectId, String taskId, String? newParentTaskId) {
+    return _db
+        .collection('projects')
+        .doc(projectId)
+        .collection('tasks')
+        .doc(taskId)
+        .update({'parentTaskId': newParentTaskId});
   }
 }

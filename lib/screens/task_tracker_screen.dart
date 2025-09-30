@@ -10,8 +10,6 @@ import 'project_list_screen.dart';
 import 'drawer_screen.dart';
 import '../repositories/local_repository.dart';
 import '../models/task.dart';
-import '../models/stage.dart';
-import '../models/step.dart' as custom_step;
 import '../services/completion_service.dart';
 import 'calendar_screen.dart';
 import '../widgets/task_heatmap_widget.dart';

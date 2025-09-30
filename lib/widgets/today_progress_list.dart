@@ -1,109 +1,133 @@
-import 'package:flutter/material.dart';
-import '../models/app_user.dart';
-import '../models/progress_history.dart';
+// lib/widgets/today_progress_list.dart
 
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:task_tracker/models/project.dart';
+import 'package:task_tracker/models/task.dart';
+import 'package:task_tracker/services/task_service.dart';
+import 'package:task_tracker/widgets/task_list_item.dart';
 
 class TodayProgressList extends StatelessWidget {
-  final AppUser? user;
-
-  const TodayProgressList({super.key, required this.user});
+  const TodayProgressList({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final today = DateTime.now();
-    final todayStart = DateTime(today.year, today.month, today.day);
-    final todayEnd = todayStart.add(const Duration(days: 1));
+    return StreamBuilder<List<Project>>(
+      stream: Provider.of<TaskService>(context).watchProjects(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-    // Фильтруем сегодняшние записи
-    final todayProgress = user?.progressHistory.where((item) {
-      if (item is ProgressHistory) {
-        return item.date.isAfter(todayStart) && item.date.isBefore(todayEnd);
-      }
-      return false;
-    }).toList() ?? [];
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(
+            child: Text('Нет задач на сегодня'),
+          );
+        }
 
-    if (todayProgress.isEmpty) {
-      return Card(
-        margin: const EdgeInsets.all(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              const Icon(Icons.emoji_events, size: 48, color: Colors.grey),
-              const SizedBox(height: 8),
-              const Text('Сегодня еще нет прогресса',
-                  style: TextStyle(fontSize: 16)),
-              Text('Добавьте шаги к задачам или подзадачам',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-            ],
-          ),
-        ),
-      );
-    }
+        final todayTasks = <Task>[];
+        final today = DateTime.now();
 
-    return Card(
-      margin: const EdgeInsets.all(12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Сегодняшний прогресс',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            ...todayProgress.map((item) {
-              if (item is ProgressHistory) {
-                return _buildProgressItem(item);
-              }
-              return const SizedBox();
-            }).toList(),
-          ],
-        ),
-      ),
+        // Collect all tasks for today from all projects
+        for (final project in snapshot.data!) {
+          final projectTasks = _getTodayTasks(project, today);
+          todayTasks.addAll(projectTasks);
+        }
+
+        if (todayTasks.isEmpty) {
+          return const Center(
+            child: Text('Нет задач на сегодня'),
+          );
+        }
+
+        return ListView.builder(
+          itemCount: todayTasks.length,
+          itemBuilder: (context, index) {
+            final task = todayTasks[index];
+            return TaskListItem(
+              task: task,
+              onTap: () => _showTaskDetails(context, task),
+            );
+          },
+        );
+      },
     );
   }
 
-  Widget _buildProgressItem(ProgressHistory progress) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            progress.itemType == 'task' ? Icons.task : Icons.arrow_right,
-            color: Colors.blue,
+  List<Task> _getTodayTasks(Project project, DateTime today) {
+    final todayTasks = <Task>[];
+
+    void checkTask(Task task) {
+      if (_isTaskForToday(task, today)) {
+        todayTasks.add(task);
+      }
+
+      // Recursively check subtasks
+      for (final subTask in task.subTasks) {
+        checkTask(subTask);
+      }
+    }
+
+    for (final task in project.tasks) {
+      checkTask(task);
+    }
+
+    return todayTasks;
+  }
+
+  bool _isTaskForToday(Task task, DateTime today) {
+    if (task.dueDate == null) return false;
+
+    final taskDate = DateTime(
+      task.dueDate!.year,
+      task.dueDate!.month,
+      task.dueDate!.day,
+    );
+
+    final todayDate = DateTime(today.year, today.month, today.day);
+
+    return taskDate == todayDate && !task.isCompleted;
+  }
+
+  void _showTaskDetails(BuildContext context, Task task) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(task.title),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (task.description.isNotEmpty)
+                Text(task.description),
+              const SizedBox(height: 16),
+              Text('Приоритет: ${_getPriorityText(task.priority)}'),
+              if (task.dueDate != null)
+                Text('Срок: ${_formatDate(task.dueDate!)}'),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  progress.itemName,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '+${progress.stepsAdded} шагов',
-                  style: TextStyle(
-                    color: Colors.green[700],
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            '${progress.date.hour.toString().padLeft(2, '0')}:${progress.date.minute.toString().padLeft(2, '0')}',
-            style: TextStyle(color: Colors.grey[600]),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Закрыть'),
           ),
         ],
       ),
     );
+  }
+
+  String _getPriorityText(int priority) {
+    switch (priority) {
+      case 1: return 'Низкий';
+      case 2: return 'Средний';
+      case 3: return 'Высокий';
+      default: return 'Обычный';
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}.${date.month}.${date.year}';
   }
 }
