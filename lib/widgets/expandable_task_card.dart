@@ -197,21 +197,22 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
     );
   }
 
+  // В методе build, обновим внешний вид карточки:
   @override
   Widget build(BuildContext context) {
     final hasSubTasks = widget.task.subTasks.isNotEmpty;
-    final indent = widget.level * 20.0; // Отступ в зависимости от уровня
+    final indent = widget.level * 16.0;
 
     return Card(
       margin: EdgeInsets.only(
-        left: indent + 8, // Динамический отступ
+        left: indent + 8,
         right: 8,
-        top: 4,
-        bottom: 4,
+        top: 2, // ✅ Меньше отступов между задачами
+        bottom: 2,
       ),
       elevation: 1,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
+      child: Container(
+        padding: const EdgeInsets.all(8), // ✅ Меньше padding
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -219,24 +220,24 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Кнопка раскрытия (если есть подзадачи)
+                // Кнопка раскрытия
                 if (hasSubTasks)
                   IconButton(
                     icon: Icon(
                       _isExpanded ? Icons.expand_less : Icons.expand_more,
-                      size: 20,
+                      size: 18, // ✅ Меньше иконка
                     ),
                     onPressed: _toggleExpanded,
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   )
                 else
                   SizedBox(
-                    width: 36,
+                    width: 32,
                     child: Center(
                       child: Icon(
                         Icons.circle,
-                        size: 6,
+                        size: 4,
                         color: Colors.grey.shade400,
                       ),
                     ),
@@ -247,7 +248,7 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
                   task: widget.task,
                   onToggle: _toggleTaskCompletion,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
 
                 // Содержимое задачи
                 Expanded(
@@ -260,156 +261,99 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
                             child: Text(
                               widget.task.title,
                               style: TextStyle(
-                                fontSize: 16 - (widget.level * 0.5), // Уменьшаем шрифт для вложенных
+                                fontSize: 14 - (widget.level * 0.3), // ✅ Меньше шрифт
                                 fontWeight: widget.level == 0 ? FontWeight.w500 : FontWeight.w400,
                                 decoration: widget.task.isCompleted && widget.task.type == TaskType.single
                                     ? TextDecoration.lineThrough
                                     : TextDecoration.none,
-                                color: widget.task.isCompleted && widget.task.type == TaskType.single
-                                    ? Colors.grey
-                                    : Colors.black87,
                               ),
                             ),
                           ),
                           // Индикатор подзадач
                           if (hasSubTasks)
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                               decoration: BoxDecoration(
                                 color: Colors.blue.shade50,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.blue.shade100),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.subdirectory_arrow_right, size: 12, color: Colors.blue),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    '${widget.task.subTasks.length}',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.blue,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
+                              child: Text(
+                                '${widget.task.subTasks.length}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.blue,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                         ],
                       ),
 
                       if (widget.task.description.isNotEmpty) ...[
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         Text(
                           widget.task.description,
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11, // ✅ Меньше шрифт
                             color: Colors.grey.shade600,
-                            fontStyle: FontStyle.italic,
                           ),
-                          maxLines: 2,
+                          maxLines: 1, // ✅ Только одна строка
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
-
-                      // Информация о задаче
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          if (widget.task.type == TaskType.stepByStep) ...[
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                              decoration: BoxDecoration(
-                                color: Colors.purple.shade50,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.purple.shade100),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.linear_scale, size: 10, color: Colors.purple),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    '${widget.task.completedSteps}/${widget.task.totalSteps}',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.purple,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                          ],
-
-                          if (widget.level > 0) ...[
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                              decoration: BoxDecoration(
-                                color: Colors.orange.shade50,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.orange.shade100),
-                              ),
-                              child: Text(
-                                'уровень ${widget.level + 1}',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.orange.shade700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
                     ],
                   ),
                 ),
 
-                // Кнопки действий
-                Column(
+                // ✅ ГОРИЗОНТАЛЬНЫЕ КНОПКИ (вместо вертикальных)
+                Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (widget.task.canAddSubTask)
                       IconButton(
-                        icon: const Icon(Icons.add, size: 18),
+                        icon: const Icon(Icons.add, size: 16),
                         onPressed: _addSubTask,
                         tooltip: 'Добавить подзадачу',
                         padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                       ),
                     if (widget.task.type == TaskType.stepByStep)
                       IconButton(
-                        icon: const Icon(Icons.play_arrow, size: 18, color: Colors.purple),
+                        icon: const Icon(Icons.play_arrow, size: 16, color: Colors.purple),
                         onPressed: _manageTaskSteps,
                         tooltip: 'Управление шагами',
                         padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                       ),
                     IconButton(
-                      icon: const Icon(Icons.edit, size: 18, color: Colors.blue),
+                      icon: const Icon(Icons.edit, size: 16, color: Colors.blue),
                       onPressed: _editTask,
-                      tooltip: 'Редактировать задачу',
+                      tooltip: 'Редактировать',
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                      icon: const Icon(Icons.delete, size: 16, color: Colors.red),
                       onPressed: widget.onTaskDeleted,
-                      tooltip: 'Удалить задачу',
+                      tooltip: 'Удалить',
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                     ),
                   ],
                 ),
               ],
             ),
 
+            // ✅ ВИЗУАЛИЗАЦИЯ ДЕРЕВА - линия вложенности
+            if (widget.level > 0)
+              Container(
+                margin: const EdgeInsets.only(left: 40, top: 4),
+                height: 1,
+                color: Colors.grey.shade300,
+              ),
+
             // Раскрытая область с подзадачами
             if (_isExpanded && hasSubTasks) ...[
-              const SizedBox(height: 12),
-              const Divider(height: 1),
               const SizedBox(height: 8),
               ...widget.task.subTasks.asMap().entries.map((entry) {
                 final subTaskIndex = entry.key;
@@ -420,7 +364,7 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
                   taskIndex: subTaskIndex,
                   onTaskUpdated: (updatedSubTask) => _updateSubTask(subTaskIndex, updatedSubTask),
                   onTaskDeleted: () => _deleteSubTask(subTaskIndex),
-                  level: widget.level + 1, // Увеличиваем уровень вложенности
+                  level: widget.level + 1,
                 );
               }),
             ],

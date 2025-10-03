@@ -181,9 +181,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // screens/home_screen.dart - ИЗМЕНИТЬ метод build
+
   @override
   Widget build(BuildContext context) {
+    print('🏠 Building home screen with ${projects.length} projects'); // ✅ ДЛЯ ОТЛАДКИ
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Task Tracker 💾'),
@@ -221,16 +223,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       )
-          : GridView.builder( // ✅ ИЗМЕНИЛИ НА GRIDVIEW
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: 1.2,
-        ),
+          : ListView.builder( // ✅ УБЕДИТЕСЬ ЧТО ЭТО ListView
+        padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: projects.length,
         itemBuilder: (context, index) {
+          print('📦 Building project card $index'); // ✅ ДЛЯ ОТЛАДКИ
           return _buildProjectCard(index);
         },
       ),
@@ -241,25 +238,39 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-// ✅ НОВЫЙ МЕТОД: Карточка проекта для главного экрана
+  // ✅ ДОБАВИТЬ ЭТОТ МЕТОД В КЛАСС _HomeScreenState (после _navigateToProjectDetail)
   Widget _buildProjectCard(int index) {
     final project = projects[index];
     return Card(
       elevation: 2,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: InkWell(
         onTap: () => _navigateToProjectDetail(index),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          height: 80,
+          child: Row(
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.folder, color: Colors.blue, size: 24),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
+              // Иконка проекта
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.folder, color: Colors.blue.shade600, size: 24),
+              ),
+              const SizedBox(width: 12),
+
+              // Информация о проекте
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
                       project.name,
                       style: const TextStyle(
                         fontSize: 16,
@@ -267,38 +278,35 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (project.description.isNotEmpty) ...[
-                Text(
-                  project.description,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                    if (project.description.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        project.description,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: 8),
-              ],
-              LinearProgressIndicator(
-                value: project.progress,
-                backgroundColor: Colors.grey.shade200,
-                color: project.progress == 1.0 ? Colors.green : Colors.blue,
               ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+              // Прогресс и счетчики
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
                     '${(project.progress * 100).toInt()}%',
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
                     '${project.completedTasks}/${project.totalTasks}',
                     style: TextStyle(
@@ -307,6 +315,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(width: 8),
+
+              // Прогресс-бар
+              SizedBox(
+                width: 60,
+                child: LinearProgressIndicator(
+                  value: project.progress,
+                  backgroundColor: Colors.grey.shade200,
+                  color: project.progress == 1.0 ? Colors.green : Colors.blue,
+                ),
               ),
             ],
           ),

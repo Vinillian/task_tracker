@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/project.dart';
 import '../models/task.dart';
 import '../models/task_type.dart';
-import '../widgets/expandable_task_card.dart'; // ✅ ИМПОРТИРУЕМ НОВЫЙ ВИДЖЕТ
+import '../widgets/expandable_task_card.dart';
 import '../widgets/add_task_dialog.dart';
 import '../widgets/edit_dialogs.dart';
 
@@ -110,20 +110,31 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   Widget _buildHeader() {
     return Card(
       margin: const EdgeInsets.all(16),
-      child: Padding(
+      child: Container(
         padding: const EdgeInsets.all(16),
+        // ❌ УБИРАЕМ фиксированную высоту 120 - она слишком маленькая
+        // height: 120,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Row(
               children: [
-                const Icon(Icons.folder, color: Colors.blue, size: 32),
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.folder, color: Colors.blue.shade600, size: 24),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     _project.name,
                     style: const TextStyle(
-                      fontSize: 24,
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -140,11 +151,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               Text(
                 _project.description,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
                   color: Colors.grey.shade600,
                 ),
+                // ✅ УБИРАЕМ maxLines: 1 - пусть описание занимает столько строк, сколько нужно
+                // maxLines: 1,
+                // overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
             ],
             Row(
               children: [
@@ -166,28 +180,20 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               ],
             ),
             const SizedBox(height: 4),
-            Text(
-              'Прогресс учитывает все задачи и подзадачи',
-              style: TextStyle(
-                fontSize: 10,
-                color: Colors.grey.shade500,
-              ),
-            ),
-            const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   '${_project.completedTasks}/${_project.totalTasks} задач выполнено',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 12,
                     color: Colors.grey.shade600,
                   ),
                 ),
                 Text(
                   'Создан: ${_project.createdAt.day}.${_project.createdAt.month}.${_project.createdAt.year}',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 10,
                     color: Colors.grey.shade500,
                   ),
                 ),
@@ -233,7 +239,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             taskIndex: index,
             onTaskUpdated: (updatedTask) => _updateTaskWithSubTasks(index, updatedTask),
             onTaskDeleted: () => _deleteTask(index),
-            level: 0, // Корневой уровень
+            level: 0,
           );
         },
       ),
