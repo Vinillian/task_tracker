@@ -1,9 +1,9 @@
-// widgets/project_card.dart
+// widgets/project_card.dart - ПОЛНОСТЬЮ ПЕРЕПИСАТЬ
 import 'package:flutter/material.dart';
 import '../models/project.dart';
 import '../models/task.dart';
 import '../models/task_type.dart';
-import 'task_card.dart';
+import 'expandable_task_card.dart'; // ✅ Будем создавать этот виджет
 import 'add_task_dialog.dart';
 import 'edit_dialogs.dart';
 
@@ -26,7 +26,7 @@ class ProjectCard extends StatefulWidget {
 }
 
 class _ProjectCardState extends State<ProjectCard> {
-  void _addTask(BuildContext context) {
+  void _addTask() {
     showDialog(
       context: context,
       builder: (context) => AddTaskDialog(
@@ -62,58 +62,15 @@ class _ProjectCardState extends State<ProjectCard> {
     );
   }
 
-  void _toggleTask(int taskIndex) {
-    final task = widget.project.tasks[taskIndex];
-    final updatedTask = task.copyWith(isCompleted: !task.isCompleted);
+  void _updateTaskWithSubTasks(int taskIndex, Task updatedTask) {
     final updatedTasks = List<Task>.from(widget.project.tasks);
     updatedTasks[taskIndex] = updatedTask;
-
-    final updatedProject = widget.project.copyWith(tasks: updatedTasks);
-    widget.onUpdate(updatedProject);
-  }
-
-  void _updateTaskSteps(int taskIndex, int newCompletedSteps) {
-    final updatedTasks = List<Task>.from(widget.project.tasks);
-    updatedTasks[taskIndex] = updatedTasks[taskIndex].copyWith(
-      completedSteps: newCompletedSteps,
-    );
-
-    final updatedProject = widget.project.copyWith(tasks: updatedTasks);
-    widget.onUpdate(updatedProject);
-  }
-
-  void _editTask(int taskIndex) {
-    showDialog(
-      context: context,
-      builder: (context) => EditTaskDialog(
-        task: widget.project.tasks[taskIndex],
-        onTaskUpdated: (String title, String description) {
-          _updateTask(taskIndex, title, description);
-        },
-      ),
-    );
-  }
-
-  void _updateTask(int taskIndex, String title, String description) {
-    final updatedTasks = List<Task>.from(widget.project.tasks);
-    updatedTasks[taskIndex] = updatedTasks[taskIndex].copyWith(
-      title: title,
-      description: description,
-    );
-
     final updatedProject = widget.project.copyWith(tasks: updatedTasks);
     widget.onUpdate(updatedProject);
   }
 
   void _deleteTask(int taskIndex) {
     final updatedTasks = List<Task>.from(widget.project.tasks)..removeAt(taskIndex);
-    final updatedProject = widget.project.copyWith(tasks: updatedTasks);
-    widget.onUpdate(updatedProject);
-  }
-
-  void _updateTaskWithSubTasks(int taskIndex, Task updatedTask) {
-    final updatedTasks = List<Task>.from(widget.project.tasks);
-    updatedTasks[taskIndex] = updatedTask;
     final updatedProject = widget.project.copyWith(tasks: updatedTasks);
     widget.onUpdate(updatedProject);
   }
@@ -127,6 +84,7 @@ class _ProjectCardState extends State<ProjectCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Заголовок проекта
             Row(
               children: [
                 const Icon(Icons.folder, color: Colors.blue),
@@ -161,7 +119,7 @@ class _ProjectCardState extends State<ProjectCard> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.add_task, color: Colors.green),
-                  onPressed: () => _addTask(context),
+                  onPressed: _addTask,
                   tooltip: 'Добавить задачу',
                 ),
               ],
@@ -172,6 +130,8 @@ class _ProjectCardState extends State<ProjectCard> {
               style: TextStyle(color: Colors.grey.shade600),
             ),
             const SizedBox(height: 12),
+
+            // Прогресс проекта
             Row(
               children: [
                 Expanded(
@@ -201,23 +161,25 @@ class _ProjectCardState extends State<ProjectCard> {
               '${widget.project.completedTasks}/${widget.project.totalTasks} задач выполнено',
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
+
             const SizedBox(height: 16),
             const Text(
-              'Задачи:',
+              'Задачи проекта:',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
+            const SizedBox(height: 8),
+
+            // ✅ ТОЛЬКО ПРЯМЫЕ ЗАДАЧИ ПРОЕКТА С ВОЗМОЖНОСТЬЮ РАСКРЫТИЯ
             ...widget.project.tasks.asMap().entries.map((entry) {
               final taskIndex = entry.key;
               final task = entry.value;
 
-              return TaskCard(
+              return ExpandableTaskCard(
                 task: task,
                 taskIndex: taskIndex,
-                onToggle: () => _toggleTask(taskIndex),
-                onEdit: () => _editTask(taskIndex),
-                onDelete: () => _deleteTask(taskIndex),
-                onUpdateSteps: (newSteps) => _updateTaskSteps(taskIndex, newSteps),
                 onTaskUpdated: (updatedTask) => _updateTaskWithSubTasks(taskIndex, updatedTask),
+                onTaskDeleted: () => _deleteTask(taskIndex),
+                level: 0, // Уровень вложенности (0 - корневой)
               );
             }),
           ],

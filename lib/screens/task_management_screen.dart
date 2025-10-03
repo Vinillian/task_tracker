@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import '../models/task.dart';
 import '../models/task_type.dart';
-import '../widgets/task_card.dart';
+import '../widgets/expandable_task_card.dart'; // ✅ ЗАМЕНИТЬ ИМПОРТ
 import '../widgets/add_task_dialog.dart';
 import '../widgets/edit_dialogs.dart';
 
@@ -80,52 +80,10 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     );
   }
 
-  void _toggleSubTask(int subTaskIndex) {
+  void _updateSubTaskWithNested(int subTaskIndex, Task updatedSubTask) {
     setState(() {
-      final subTask = _task.subTasks[subTaskIndex];
-      final updatedSubTask = subTask.copyWith(isCompleted: !subTask.isCompleted);
       final updatedSubTasks = List<Task>.from(_task.subTasks);
       updatedSubTasks[subTaskIndex] = updatedSubTask;
-
-      _task = _task.copyWith(subTasks: updatedSubTasks);
-    });
-
-    widget.onTaskUpdated(_task);
-  }
-
-  void _updateSubTaskSteps(int subTaskIndex, int newCompletedSteps) {
-    setState(() {
-      final updatedSubTasks = List<Task>.from(_task.subTasks);
-      updatedSubTasks[subTaskIndex] = updatedSubTasks[subTaskIndex].copyWith(
-        completedSteps: newCompletedSteps,
-      );
-
-      _task = _task.copyWith(subTasks: updatedSubTasks);
-    });
-
-    widget.onTaskUpdated(_task);
-  }
-
-  void _editSubTask(int subTaskIndex) {
-    showDialog(
-      context: context,
-      builder: (context) => EditTaskDialog(
-        task: _task.subTasks[subTaskIndex],
-        onTaskUpdated: (String title, String description) {
-          _updateSubTask(subTaskIndex, title, description);
-        },
-      ),
-    );
-  }
-
-  void _updateSubTask(int subTaskIndex, String title, String description) {
-    setState(() {
-      final updatedSubTasks = List<Task>.from(_task.subTasks);
-      updatedSubTasks[subTaskIndex] = updatedSubTasks[subTaskIndex].copyWith(
-        title: title,
-        description: description,
-      );
-
       _task = _task.copyWith(subTasks: updatedSubTasks);
     });
 
@@ -135,16 +93,6 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   void _deleteSubTask(int subTaskIndex) {
     setState(() {
       final updatedSubTasks = List<Task>.from(_task.subTasks)..removeAt(subTaskIndex);
-      _task = _task.copyWith(subTasks: updatedSubTasks);
-    });
-
-    widget.onTaskUpdated(_task);
-  }
-
-  void _updateSubTaskWithNested(int subTaskIndex, Task updatedSubTask) {
-    setState(() {
-      final updatedSubTasks = List<Task>.from(_task.subTasks);
-      updatedSubTasks[subTaskIndex] = updatedSubTask;
       _task = _task.copyWith(subTasks: updatedSubTasks);
     });
 
@@ -168,7 +116,6 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       ),
     );
   }
-
 
   Widget _buildTaskHeader() {
     return Card(
@@ -313,14 +260,12 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         itemBuilder: (context, index) {
           final subTask = _task.subTasks[index];
 
-          return TaskCard(
+          return ExpandableTaskCard( // ✅ ИСПОЛЬЗУЕМ НОВЫЙ ВИДЖЕТ
             task: subTask,
             taskIndex: index,
-            onToggle: () => _toggleSubTask(index),
-            onEdit: () => _editSubTask(index),
-            onDelete: () => _deleteSubTask(index),
-            onUpdateSteps: (newSteps) => _updateSubTaskSteps(index, newSteps),
             onTaskUpdated: (updatedTask) => _updateSubTaskWithNested(index, updatedTask),
+            onTaskDeleted: () => _deleteSubTask(index),
+            level: 1, // Начинаем с уровня 1 (подзадачи)
           );
         },
       ),

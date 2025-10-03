@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/project.dart';
 import '../models/task.dart';
 import '../models/task_type.dart';
-import '../widgets/task_card.dart';
+import '../widgets/expandable_task_card.dart'; // ✅ ИМПОРТИРУЕМ НОВЫЙ ВИДЖЕТ
 import '../widgets/add_task_dialog.dart';
 import '../widgets/edit_dialogs.dart';
 
@@ -70,52 +70,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  void _toggleTask(int taskIndex) {
+  void _updateTaskWithSubTasks(int taskIndex, Task updatedTask) {
     setState(() {
-      final task = _project.tasks[taskIndex];
-      final updatedTask = task.copyWith(isCompleted: !task.isCompleted);
       final updatedTasks = List<Task>.from(_project.tasks);
       updatedTasks[taskIndex] = updatedTask;
-
-      _project = _project.copyWith(tasks: updatedTasks);
-    });
-
-    widget.onProjectUpdated(_project);
-  }
-
-  void _updateTaskSteps(int taskIndex, int newCompletedSteps) {
-    setState(() {
-      final updatedTasks = List<Task>.from(_project.tasks);
-      updatedTasks[taskIndex] = updatedTasks[taskIndex].copyWith(
-        completedSteps: newCompletedSteps,
-      );
-
-      _project = _project.copyWith(tasks: updatedTasks);
-    });
-
-    widget.onProjectUpdated(_project);
-  }
-
-  void _editTask(int taskIndex) {
-    showDialog(
-      context: context,
-      builder: (context) => EditTaskDialog(
-        task: _project.tasks[taskIndex],
-        onTaskUpdated: (String title, String description) {
-          _updateTask(taskIndex, title, description);
-        },
-      ),
-    );
-  }
-
-  void _updateTask(int taskIndex, String title, String description) {
-    setState(() {
-      final updatedTasks = List<Task>.from(_project.tasks);
-      updatedTasks[taskIndex] = updatedTasks[taskIndex].copyWith(
-        title: title,
-        description: description,
-      );
-
       _project = _project.copyWith(tasks: updatedTasks);
     });
 
@@ -125,16 +83,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   void _deleteTask(int taskIndex) {
     setState(() {
       final updatedTasks = List<Task>.from(_project.tasks)..removeAt(taskIndex);
-      _project = _project.copyWith(tasks: updatedTasks);
-    });
-
-    widget.onProjectUpdated(_project);
-  }
-
-  void _updateTaskWithSubTasks(int taskIndex, Task updatedTask) {
-    setState(() {
-      final updatedTasks = List<Task>.from(_project.tasks);
-      updatedTasks[taskIndex] = updatedTask;
       _project = _project.copyWith(tasks: updatedTasks);
     });
 
@@ -280,14 +228,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: _project.tasks.length,
         itemBuilder: (context, index) {
-          return TaskCard(
+          return ExpandableTaskCard(
             task: _project.tasks[index],
             taskIndex: index,
-            onToggle: () => _toggleTask(index),
-            onEdit: () => _editTask(index),
-            onDelete: () => _deleteTask(index),
-            onUpdateSteps: (newSteps) => _updateTaskSteps(index, newSteps),
             onTaskUpdated: (updatedTask) => _updateTaskWithSubTasks(index, updatedTask),
+            onTaskDeleted: () => _deleteTask(index),
+            level: 0, // Корневой уровень
           );
         },
       ),

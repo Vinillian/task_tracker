@@ -4,7 +4,6 @@ import '../models/project.dart';
 import '../models/task.dart';
 import '../models/task_type.dart';
 import '../utils/storage_helper.dart';
-import '../widgets/project_card.dart';
 import '../widgets/add_project_dialog.dart';
 import 'project_detail_screen.dart';
 
@@ -169,13 +168,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _saveProjects();
   }
 
-  void _deleteProject(int index) {
-    setState(() {
-      projects.removeAt(index);
-    });
-    _saveProjects();
-  }
-
   void _navigateToProjectDetail(int index) {
     Navigator.push(
       context,
@@ -189,6 +181,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // screens/home_screen.dart - ИЗМЕНИТЬ метод build
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -228,23 +221,96 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       )
-          : ListView.builder(
+          : GridView.builder( // ✅ ИЗМЕНИЛИ НА GRIDVIEW
+        padding: const EdgeInsets.all(16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 1.2,
+        ),
         itemCount: projects.length,
         itemBuilder: (context, index) {
-          return GestureDetector(
-            onTap: () => _navigateToProjectDetail(index),
-            child: ProjectCard(
-              project: projects[index],
-              projectIndex: index,
-              onUpdate: (updatedProject) => _updateProject(index, updatedProject),
-              onDelete: () => _deleteProject(index),
-            ),
-          );
+          return _buildProjectCard(index);
         },
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _addNewProject,
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+// ✅ НОВЫЙ МЕТОД: Карточка проекта для главного экрана
+  Widget _buildProjectCard(int index) {
+    final project = projects[index];
+    return Card(
+      elevation: 2,
+      child: InkWell(
+        onTap: () => _navigateToProjectDetail(index),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.folder, color: Colors.blue, size: 24),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      project.name,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (project.description.isNotEmpty) ...[
+                Text(
+                  project.description,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+              ],
+              LinearProgressIndicator(
+                value: project.progress,
+                backgroundColor: Colors.grey.shade200,
+                color: project.progress == 1.0 ? Colors.green : Colors.blue,
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '${(project.progress * 100).toInt()}%',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    '${project.completedTasks}/${project.totalTasks}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
