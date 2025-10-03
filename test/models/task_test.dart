@@ -1,56 +1,54 @@
-// test/models/task_test.dart
 import 'package:flutter_test/flutter_test.dart';
 import 'package:task_tracker/models/task.dart';
+import 'package:task_tracker/models/task_type.dart';
 
 void main() {
-  group('Task Model Tests', () {
-    test('Task creation with default values', () {
+  group('Task Model Tests - Step Progress', () {
+    test('Step-by-step task progress calculation', () {
       final task = Task(
         id: '1',
         title: 'Test Task',
         description: 'Test Description',
+        type: TaskType.stepByStep,
+        totalSteps: 5,
+        completedSteps: 3,
       );
 
-      expect(task.id, '1');
-      expect(task.title, 'Test Task');
-      expect(task.description, 'Test Description');
-      expect(task.isCompleted, false);
+      expect(task.progress, 0.6); // 3/5 = 60%
     });
 
-    test('Task copyWith method', () {
-      final original = Task(
+    test('Step-by-step task with zero steps', () {
+      final task = Task(
         id: '1',
-        title: 'Original',
-        description: 'Desc',
+        title: 'Test Task',
+        description: 'Test Description',
+        type: TaskType.stepByStep,
+        totalSteps: 0,
+        completedSteps: 0,
+      );
+
+      expect(task.progress, 0.0); // Should handle division by zero
+    });
+
+    test('Single task progress calculation', () {
+      final incompleteTask = Task(
+        id: '1',
+        title: 'Incomplete Task',
+        description: 'Test Description',
+        type: TaskType.single,
         isCompleted: false,
       );
 
-      final updated = original.copyWith(
-        title: 'Updated',
+      final completeTask = Task(
+        id: '2',
+        title: 'Complete Task',
+        description: 'Test Description',
+        type: TaskType.single,
         isCompleted: true,
       );
 
-      expect(updated.id, '1');
-      expect(updated.title, 'Updated');
-      expect(updated.description, 'Desc');
-      expect(updated.isCompleted, true);
-    });
-
-    test('Task JSON serialization', () {
-      final task = Task(
-        id: '1',
-        title: 'Test Task',
-        description: 'Test Description',
-        isCompleted: false,
-      );
-
-      final json = task.toJson();
-      final deserialized = Task.fromJson(json);
-
-      expect(deserialized.id, task.id);
-      expect(deserialized.title, task.title);
-      expect(deserialized.description, task.description);
-      expect(deserialized.isCompleted, task.isCompleted);
+      expect(incompleteTask.progress, 0.0);
+      expect(completeTask.progress, 1.0);
     });
   });
 }

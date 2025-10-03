@@ -2,6 +2,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:task_tracker/models/project.dart';
 import 'package:task_tracker/models/task.dart';
+import 'package:task_tracker/models/task_type.dart'; // ✅ ДОБАВИТЬ ЭТОТ ИМПОРТ
 
 void main() {
   group('Project Model Tests', () {
@@ -177,5 +178,49 @@ void main() {
     expect(project.progress, 0.6);
     expect(project.totalTasks, 5);
     expect(project.completedTasks, 3);
+  });
+
+  // Добавить в существующий файл:
+  test('Project progress calculation with step-by-step tasks', () {
+    final stepTask = Task(
+      id: '1',
+      title: 'Step Task',
+      description: '',
+      type: TaskType.stepByStep,
+      totalSteps: 5,
+      completedSteps: 3, // 60% progress
+    );
+
+    final singleTask = Task(
+      id: '2',
+      title: 'Single Task',
+      description: '',
+      type: TaskType.single,
+      isCompleted: true, // 100% progress
+    );
+
+    final project = Project(
+      id: '1',
+      name: 'Test Project',
+      description: 'Test Description',
+      tasks: [stepTask, singleTask],
+      createdAt: DateTime.now(),
+    );
+
+    // Progress should be average of both tasks: (0.6 + 1.0) / 2 = 0.8
+    expect(project.progress, 0.8);
+  });
+
+  test('Task own progress calculation for step-by-step', () {
+    final stepTask = Task(
+      id: '1',
+      title: 'Step Task',
+      description: '',
+      type: TaskType.stepByStep,
+      totalSteps: 5,
+      completedSteps: 3,
+    );
+
+    expect(stepTask.progress, 0.6); // 3/5 = 60%
   });
 }
