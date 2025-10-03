@@ -122,73 +122,126 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
   }
 
   void _manageTaskSteps() {
+    int tempCompletedSteps = widget.task.completedSteps;
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
-            title: Text('Управление: ${widget.task.title}'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Прогресс: ${widget.task.completedSteps}/${widget.task.totalSteps}'),
-                const SizedBox(height: 16),
-                LinearProgressIndicator(value: widget.task.progress),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    ElevatedButton(
-                      onPressed: widget.task.completedSteps > 0
-                          ? () {
-                        _updateTaskSteps(widget.task.completedSteps - 1);
-                        Navigator.pop(context);
-                      }
-                          : null,
-                      child: const Text('-1'),
+            title: Text('Управление прогрессом: ${widget.task.title}'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ✅ ТЕКУЩИЙ ПРОГРЕСС
+                  Text(
+                    'Прогресс: $tempCompletedSteps/${widget.task.totalSteps}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
-                    ElevatedButton(
-                      onPressed: widget.task.completedSteps < widget.task.totalSteps
-                          ? () {
-                        _updateTaskSteps(widget.task.completedSteps + 1);
-                        Navigator.pop(context);
-                      }
-                          : null,
-                      child: const Text('+1'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                if (widget.task.totalSteps > 1) ...[
-                  const Text('Или установите точное значение:'),
-                  const SizedBox(height: 8),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ✅ ПРОГРЕСС БАР
+                  LinearProgressIndicator(
+                    value: widget.task.totalSteps > 0
+                        ? tempCompletedSteps / widget.task.totalSteps
+                        : 0.0,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ✅ КНОПКИ БЫСТРОГО УПРАВЛЕНИЯ
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      Expanded(
-                        child: Slider(
-                          value: widget.task.completedSteps.toDouble(),
-                          min: 0,
-                          max: widget.task.totalSteps.toDouble(),
-                          divisions: widget.task.totalSteps,
-                          onChanged: (value) {
-                            setState(() {
-                              _updateTaskSteps(value.toInt());
-                            });
-                          },
-                          onChangeEnd: (value) {
-                            Navigator.pop(context);
-                          },
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Сброс'),
+                        onPressed: () {
+                          setState(() {
+                            tempCompletedSteps = 0;
+                          });
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey,
                         ),
+                      ),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.remove),
+                        label: const Text('1'),
+                        onPressed: tempCompletedSteps > 0
+                            ? () {
+                          setState(() {
+                            tempCompletedSteps--;
+                          });
+                        }
+                            : null,
+                      ),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.add),
+                        label: const Text('1'),
+                        onPressed: tempCompletedSteps < widget.task.totalSteps
+                            ? () {
+                          setState(() {
+                            tempCompletedSteps++;
+                          });
+                        }
+                            : null,
                       ),
                     ],
                   ),
+                  const SizedBox(height: 16),
+
+                  // ✅ ПОЛЕ ВВОДА ТОЧНОГО ЗНАЧЕНИЯ
+                  TextField(
+                    decoration: InputDecoration(
+                      labelText: 'Установить точное значение',
+                      hintText: 'Введите от 0 до ${widget.task.totalSteps}',
+                      border: const OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (value) {
+                      final newValue = int.tryParse(value) ?? tempCompletedSteps;
+                      setState(() {
+                        tempCompletedSteps = newValue.clamp(0, widget.task.totalSteps);
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ✅ СЛАЙДЕР ДЛЯ ВИЗУАЛЬНОГО УПРАВЛЕНИЯ
+                  if (widget.task.totalSteps > 1) ...[
+                    const Text('Или используйте слайдер:'),
+                    const SizedBox(height: 8),
+                    Slider(
+                      value: tempCompletedSteps.toDouble(),
+                      min: 0,
+                      max: widget.task.totalSteps.toDouble(),
+                      divisions: widget.task.totalSteps,
+                      label: '$tempCompletedSteps',
+                      onChanged: (value) {
+                        setState(() {
+                          tempCompletedSteps = value.toInt();
+                        });
+                      },
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Закрыть'),
+                child: const Text('Отмена'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  _updateTaskSteps(tempCompletedSteps);
+                  Navigator.pop(context);
+                },
+                child: const Text('Сохранить'),
               ),
             ],
           );
@@ -317,13 +370,14 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                       ),
+                    // В Row с горизонтальными кнопками, обновим кнопку управления шагами:
                     if (widget.task.type == TaskType.stepByStep)
                       IconButton(
-                        icon: const Icon(Icons.play_arrow, size: 16, color: Colors.purple),
+                        icon: const Icon(Icons.play_circle_outline, color: Colors.purple, size: 25),
                         onPressed: _manageTaskSteps,
                         tooltip: 'Управление шагами',
                         padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        constraints: const BoxConstraints(minWidth: 40, minHeight: 40), // ✅ Увеличили размер
                       ),
                     IconButton(
                       icon: const Icon(Icons.edit, size: 16, color: Colors.blue),
