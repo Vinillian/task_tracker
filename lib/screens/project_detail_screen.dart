@@ -1,11 +1,12 @@
 // screens/project_detail_screen.dart
 import 'package:flutter/material.dart';
+
 import '../models/project.dart';
 import '../models/task.dart';
 import '../models/task_type.dart';
-import '../widgets/expandable_task_card.dart';
 import '../widgets/add_task_dialog.dart';
 import '../widgets/edit_dialogs.dart';
+import '../widgets/expandable_task_card.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final Project project;
@@ -25,6 +26,7 @@ class ProjectDetailScreen extends StatefulWidget {
 
 class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   late Project _project;
+  bool _allExpanded = false;
 
   @override
   void initState() {
@@ -32,18 +34,26 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     _project = widget.project;
   }
 
+  void _toggleAllExpanded() {
+    setState(() {
+      _allExpanded = !_allExpanded;
+    });
+  }
+
   void _addTask() {
     showDialog(
       context: context,
       builder: (context) => AddTaskDialog(
-        onTaskCreated: (String title, String description, TaskType type, int steps) {
+        onTaskCreated:
+            (String title, String description, TaskType type, int steps) {
           _createTask(title, description, type, steps);
         },
       ),
     );
   }
 
-  void _createTask(String title, String description, TaskType type, int totalSteps) {
+  void _createTask(
+      String title, String description, TaskType type, int totalSteps) {
     setState(() {
       final newTask = Task(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -61,6 +71,20 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     });
 
     widget.onProjectUpdated(_project);
+
+    // ✅ АВТОПРОКРУТКА К НОВОЙ ЗАДАЧЕ (с проверкой mounted)
+    if (mounted) {
+      Future.delayed(const Duration(milliseconds: 100), () {
+        final scrollController = PrimaryScrollController.of(context);
+        {
+          scrollController.animateTo(
+            scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -112,8 +136,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       margin: const EdgeInsets.all(16),
       child: Container(
         padding: const EdgeInsets.all(16),
-        // ❌ УБИРАЕМ фиксированную высоту 120 - она слишком маленькая
-        // height: 120,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
@@ -127,7 +149,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     color: Colors.blue.shade50,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(Icons.folder, color: Colors.blue.shade600, size: 24),
+                  child:
+                      Icon(Icons.folder, color: Colors.blue.shade600, size: 24),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -138,6 +161,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                ),
+                IconButton(
+                  icon: Icon(
+                    _allExpanded ? Icons.unfold_less : Icons.unfold_more,
+                    color: Colors.blue,
+                  ),
+                  onPressed: _toggleAllExpanded,
+                  tooltip: _allExpanded ? 'Свернуть все' : 'Развернуть все',
                 ),
                 IconButton(
                   icon: const Icon(Icons.edit, color: Colors.orange),
@@ -154,9 +185,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   fontSize: 14,
                   color: Colors.grey.shade600,
                 ),
-                // ✅ УБИРАЕМ maxLines: 1 - пусть описание занимает столько строк, сколько нужно
-                // maxLines: 1,
-                // overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 8),
             ],
@@ -166,7 +194,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   child: LinearProgressIndicator(
                     value: _project.progress,
                     backgroundColor: Colors.grey.shade200,
-                    color: _project.progress == 1.0 ? Colors.green : Colors.blue,
+                    color:
+                        _project.progress == 1.0 ? Colors.green : Colors.blue,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -237,9 +266,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           return ExpandableTaskCard(
             task: _project.tasks[index],
             taskIndex: index,
-            onTaskUpdated: (updatedTask) => _updateTaskWithSubTasks(index, updatedTask),
+            onTaskUpdated: (updatedTask) =>
+                _updateTaskWithSubTasks(index, updatedTask),
             onTaskDeleted: () => _deleteTask(index),
             level: 0,
+            forceExpanded:
+                _allExpanded, // ✅ ПЕРЕДАЕМ ГЛОБАЛЬНОЕ СОСТОЯНИЕ ВСЕМ КОРНЕВЫМ ЗАДАЧАМ
           );
         },
       ),

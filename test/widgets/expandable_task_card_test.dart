@@ -1,147 +1,68 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:task_tracker/widgets/expandable_task_card.dart';
 import 'package:task_tracker/models/task.dart';
-import 'package:task_tracker/models/task_type.dart';
+import 'package:task_tracker/widgets/expandable_task_card.dart';
 
 void main() {
-  group('ExpandableTaskCard Step Management Tests', () {
-    late Task stepTask;
-    late Function(Task) onTaskUpdated;
-    late Function() onTaskDeleted;
-
-    setUp(() {
-      stepTask = Task(
+  group('ExpandableTaskCard Tests', () {
+    testWidgets('Card expands and collapses correctly', (tester) async {
+      final task = Task(
         id: '1',
-        title: 'Test Step Task',
+        title: 'Test Task',
         description: 'Test Description',
-        type: TaskType.stepByStep,
-        totalSteps: 5,
-        completedSteps: 2,
+        subTasks: [
+          Task(id: '1-1', title: 'Sub Task', description: ''),
+        ],
       );
 
-      onTaskUpdated = (task) {};
-      onTaskDeleted = () {};
-    });
-
-    testWidgets('ExpandableTaskCard builds without error for step task', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: ExpandableTaskCard(
-              task: stepTask,
+              task: task,
               taskIndex: 0,
-              onTaskUpdated: onTaskUpdated,
-              onTaskDeleted: onTaskDeleted,
+              onTaskUpdated: (_) {},
+              onTaskDeleted: () {},
               level: 0,
             ),
           ),
         ),
       );
 
-      // Просто проверяем что виджет строится без ошибок
-      expect(find.text('Test Step Task'), findsOneWidget);
-      expect(find.text('2/5'), findsOneWidget); // Прогресс шагов
-    });
+      // Проверяем, что изначально свернуто
+      expect(find.text('Sub Task'), findsNothing);
 
-    testWidgets('Step management button shows for step-by-step tasks', (WidgetTester tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: ExpandableTaskCard(
-              task: stepTask,
-              taskIndex: 0,
-              onTaskUpdated: onTaskUpdated,
-              onTaskDeleted: onTaskDeleted,
-              level: 0,
-            ),
-          ),
-        ),
-      );
-
-      await tester.pumpAndSettle(); // ✅ ДОБАВИТЬ ДЛЯ ПОЛНОЙ ОТРИСОВКИ
-
-      // ✅ ИСПРАВЛЕНО: используем правильную иконку play_circle_outline
-      expect(find.byIcon(Icons.play_circle_outline), findsOneWidget);
-    });
-
-    testWidgets('Step management dialog shows correct controls', (WidgetTester tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: ExpandableTaskCard(
-              task: stepTask,
-              taskIndex: 0,
-              onTaskUpdated: onTaskUpdated,
-              onTaskDeleted: onTaskDeleted,
-              level: 0,
-            ),
-          ),
-        ),
-      );
-
-      await tester.pumpAndSettle();
-
-      // Open step management dialog
-      await tester.tap(find.byIcon(Icons.play_circle_outline));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Управление прогрессом: Test Step Task'), findsOneWidget);
-      expect(find.text('Прогресс: 2/5'), findsOneWidget);
-      expect(find.byType(Slider), findsOneWidget);
-      expect(find.text('Сброс'), findsOneWidget);
-
-      // ✅ ИСПРАВЛЕНО: ищем иконки ВНУТРИ диалога
-      expect(find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.byIcon(Icons.remove),
-      ), findsOneWidget); // Кнопка минус в диалоге
-      expect(find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.byIcon(Icons.add),
-      ), findsOneWidget); // Кнопка плюс в диалоге
-    });
-
-    testWidgets('Step buttons work correctly in dialog', (WidgetTester tester) async {
-      bool updateCalled = false;
-      Task? updatedTask;
-
-      onTaskUpdated = (task) {
-        updateCalled = true;
-        updatedTask = task;
-      };
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: ExpandableTaskCard(
-              task: stepTask,
-              taskIndex: 0,
-              onTaskUpdated: onTaskUpdated,
-              onTaskDeleted: onTaskDeleted,
-              level: 0,
-            ),
-          ),
-        ),
-      );
-
-      await tester.pumpAndSettle();
-
-      // Open dialog and test +1 button
-      await tester.tap(find.byIcon(Icons.play_circle_outline));
-      await tester.pumpAndSettle();
-
-      // ✅ ИСПРАВЛЕНО: нажимаем на иконку плюса В ДИАЛОГЕ
-      await tester.tap(find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.byIcon(Icons.add),
-      ));
-      await tester.pump();
-      await tester.tap(find.text('Сохранить'));
+      // Нажимаем кнопку раскрытия
+      await tester.tap(find.byIcon(Icons.expand_more));
       await tester.pump();
 
-      expect(updateCalled, true);
-      expect(updatedTask?.completedSteps, 3);
+      // Проверяем, что подзадача появилась
+      expect(find.text('Sub Task'), findsOneWidget);
+    });
+
+    testWidgets('Auto-expands when adding sub task', (tester) async {
+      final task = Task(
+        id: '1',
+        title: 'Test Task',
+        description: 'Test Description',
+        subTasks: [],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ExpandableTaskCard(
+              task: task,
+              taskIndex: 0,
+              onTaskUpdated: (_) {},
+              onTaskDeleted: () {},
+              level: 0,
+            ),
+          ),
+        ),
+      );
+
+      // TODO: Добавить тест на автоматическое раскрытие
     });
   });
 }

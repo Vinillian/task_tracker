@@ -24,7 +24,8 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
   @override
   void initState() {
     super.initState();
-    _stepsController = TextEditingController(text: _steps.toString()); // ✅ ИНИЦИАЛИЗИРОВАТЬ
+    _stepsController =
+        TextEditingController(text: _steps.toString()); // ✅ ИНИЦИАЛИЗИРОВАТЬ
   }
 
   @override
@@ -37,7 +38,8 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Добавить задачу'),
-      content: SingleChildScrollView( // ✅ Добавляем скролл на случай большого контента
+      content: SingleChildScrollView(
+        // ✅ Добавляем скролл на случай большого контента
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -73,7 +75,8 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
                   items: TaskType.values.map((TaskType type) {
                     return DropdownMenuItem<TaskType>(
                       value: type,
-                      child: Text(type == TaskType.single ? 'Одиночная' : 'Пошаговая'),
+                      child: Text(
+                          type == TaskType.single ? 'Одиночная' : 'Пошаговая'),
                     );
                   }).toList(),
                 ),
@@ -98,7 +101,8 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
                       onChanged: (value) {
                         final steps = int.tryParse(value) ?? 1;
                         setState(() {
-                          _steps = steps.clamp(1, 100); // ✅ Ограничиваем от 1 до 100
+                          _steps =
+                              steps.clamp(1, 100); // ✅ Ограничиваем от 1 до 100
                         });
                       },
                     ),
@@ -112,7 +116,8 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
                         onPressed: () {
                           setState(() {
                             _steps = (_steps + 1).clamp(1, 100);
-                            _stepsController.text = _steps.toString(); // ✅ ОБНОВИТЬ ПОЛЕ ВВОДА
+                            _stepsController.text =
+                                _steps.toString(); // ✅ ОБНОВИТЬ ПОЛЕ ВВОДА
                           });
                         },
                         tooltip: 'Увеличить',
@@ -122,7 +127,8 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
                         onPressed: () {
                           setState(() {
                             _steps = (_steps - 1).clamp(1, 100);
-                            _stepsController.text = _steps.toString(); // ✅ ОБНОВИТЬ ПОЛЕ ВВОДА
+                            _stepsController.text =
+                                _steps.toString(); // ✅ ОБНОВИТЬ ПОЛЕ ВВОДА
                           });
                         },
                         tooltip: 'Уменьшить',
@@ -143,10 +149,10 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
         ElevatedButton(
           onPressed: () {
             if (_title.isNotEmpty) {
-              // ✅ Для одиночных задач используем 1 шаг по умолчанию
               final steps = _type == TaskType.stepByStep ? _steps : 1;
               widget.onTaskCreated(_title, _description, _type, steps);
-              Navigator.pop(context);
+              Navigator.pop(
+                  context); // ✅ ТОЛЬКО закрываем диалог, НЕ весь экран
             }
           },
           child: const Text('Добавить'),

@@ -1,6 +1,5 @@
-// models/project.dart
+// lib/models/project.dart
 import 'task.dart';
-import 'task_type.dart'; // ✅ ДОБАВЛЕН ИМПОРТ
 
 class Project {
   final String id;
@@ -17,90 +16,51 @@ class Project {
     required this.createdAt,
   });
 
-  // ✅ ГИБРИДНАЯ ЛОГИКА: прогресс проекта учитывает ВСЕ задачи и подзадачи
+  // ✅ Прогресс проекта с учетом ВСЕХ задач всех уровней
   double get progress {
     if (tasks.isEmpty) return 0.0;
 
-    // Рекурсивно собираем прогресс всех задач и подзадач
+    // Убедитесь что логика расчета правильная
     double totalProgress = 0.0;
-    int totalTasksCount = 0;
-
-    void calculateTaskProgress(Task task) {
-      // Добавляем прогресс текущей задачи
-      totalProgress += _getTaskOwnProgress(task);
-      totalTasksCount += 1;
-
-      // Рекурсивно обрабатываем подзадачи
-      for (final subTask in task.subTasks) {
-        calculateTaskProgress(subTask);
-      }
-    }
-
-    // Обрабатываем все прямые задачи проекта
     for (final task in tasks) {
-      calculateTaskProgress(task);
+      totalProgress += task.progress;
     }
 
-    return totalTasksCount > 0 ? totalProgress / totalTasksCount : 0.0;
+    return tasks.isEmpty ? 0.0 : totalProgress / tasks.length;
   }
 
-  // ✅ Вспомогательный метод: прогресс только самой задачи (без учета подзадач)
-  double _getTaskOwnProgress(Task task) {
-    if (task.type == TaskType.stepByStep) {
-      return task.totalSteps > 0 ? task.completedSteps / task.totalSteps : 0.0;
-    } else {
-      return task.isCompleted ? 1.0 : 0.0;
-    }
-  }
-
-  // ✅ Счетчики тоже учитывают ВСЕ задачи рекурсивно
+  // ✅ Общее количество задач (включая все подзадачи)
   int get totalTasks {
     int count = 0;
-
-    void countTasks(Task task) {
-      count += 1;
-      for (final subTask in task.subTasks) {
-        countTasks(subTask);
-      }
-    }
-
     for (final task in tasks) {
-      countTasks(task);
+      count += task.totalTasksCount;
     }
-
     return count;
   }
 
+  // ✅ Количество выполненных задач (включая все подзадачи)
   int get completedTasks {
-    int completedCount = 0;
-
-    void countCompletedTasks(Task task) {
-      if (_isTaskCompleted(task)) {
-        completedCount += 1;
-      }
-
-      for (final subTask in task.subTasks) {
-        countCompletedTasks(subTask);
-      }
-    }
-
+    int count = 0;
     for (final task in tasks) {
-      countCompletedTasks(task);
+      count += task.completedTasksCount;
     }
-
-    return completedCount;
+    return count;
   }
 
-  // ✅ Вспомогательный метод: проверка завершения задачи (только собственный статус)
-  bool _isTaskCompleted(Task task) {
-    if (task.type == TaskType.stepByStep) {
-      return task.completedSteps == task.totalSteps;
-    } else {
-      return task.isCompleted;
+  // ✅ Метод для обновления статусов завершения всех задач
+  void updateAllCompletionStatuses() {
+    for (final task in tasks) {
+      _updateTaskCompletionStatus(task);
     }
   }
 
-  // Остальные методы без изменений...
+  void _updateTaskCompletionStatus(Task task) {
+    for (final subTask in task.subTasks) {
+      _updateTaskCompletionStatus(subTask);
+    }
+    task.updateCompletionStatus();
+  }
+
   Project copyWith({
     String? id,
     String? name,
@@ -129,13 +89,15 @@ class Project {
 
   factory Project.fromJson(Map<String, dynamic> json) {
     return Project(
-      id: json['id']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
-      description: json['description']?.toString() ?? '',
+      id: json['id'] ?? '',
+      name: json['name'] ?? '',
+      description: json['description'] ?? '',
       tasks: (json['tasks'] as List<dynamic>?)
-          ?.map((taskJson) => Task.fromJson(taskJson as Map<String, dynamic>))
-          .toList() ?? [],
-      createdAt: DateTime.fromMillisecondsSinceEpoch(json['createdAt'] as int? ?? 0),
+              ?.map((taskJson) => Task.fromJson(taskJson))
+              .toList() ??
+          [],
+      createdAt:
+          DateTime.fromMillisecondsSinceEpoch(json['createdAt'] as int? ?? 0),
     );
   }
 }
