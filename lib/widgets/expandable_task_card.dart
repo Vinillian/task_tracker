@@ -32,6 +32,21 @@ class ExpandableTaskCard extends StatefulWidget {
 class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
   bool _isExpanded = false;
 
+  Color _getLevelColor(int level) {
+    switch (level) {
+      case 1:
+        return Colors.blue.shade300;
+      case 2:
+        return Colors.green.shade300;
+      case 3:
+        return Colors.orange.shade300;
+      case 4:
+        return Colors.purple.shade300;
+      default:
+        return Colors.grey.shade300;
+    }
+  }
+
   @override
   void didUpdateWidget(ExpandableTaskCard oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -53,7 +68,7 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
 
   void _toggleTaskCompletion() {
     final updatedTask =
-    widget.task.copyWith(isCompleted: !widget.task.isCompleted);
+        widget.task.copyWith(isCompleted: !widget.task.isCompleted);
 
     // ✅ АВТОМАТИЧЕСКОЕ ОБНОВЛЕНИЕ СТАТУСА ПОДЗАДАЧ
     if (updatedTask.isCompleted && updatedTask.subTasks.isNotEmpty) {
@@ -93,35 +108,33 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
   void _editTask() {
     showDialog(
       context: context,
-      builder: (context) =>
-          EditTaskDialog(
-            task: widget.task,
-            onTaskUpdated: (String title, String description) {
-              final updatedTask = widget.task.copyWith(
-                title: title,
-                description: description,
-              );
-              widget.onTaskUpdated(updatedTask);
-            },
-          ),
+      builder: (context) => EditTaskDialog(
+        task: widget.task,
+        onTaskUpdated: (String title, String description) {
+          final updatedTask = widget.task.copyWith(
+            title: title,
+            description: description,
+          );
+          widget.onTaskUpdated(updatedTask);
+        },
+      ),
     );
   }
 
   void _addSubTask() {
     showDialog(
       context: context,
-      builder: (context) =>
-          AddTaskDialog(
-            onTaskCreated:
-                (String title, String description, TaskType type, int steps) {
-              _createSubTask(title, description, type, steps);
-            },
-          ),
+      builder: (context) => AddTaskDialog(
+        onTaskCreated:
+            (String title, String description, TaskType type, int steps) {
+          _createSubTask(title, description, type, steps);
+        },
+      ),
     );
   }
 
-  void _createSubTask(String title, String description, TaskType type,
-      int totalSteps) {
+  void _createSubTask(
+      String title, String description, TaskType type, int totalSteps) {
     if (!widget.task.canAddSubTask) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -133,9 +146,7 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
     }
 
     final newSubTask = Task(
-      id: '${widget.task.id}_${DateTime
-          .now()
-          .millisecondsSinceEpoch}',
+      id: '${widget.task.id}_${DateTime.now().millisecondsSinceEpoch}',
       title: title,
       description: description,
       isCompleted: false,
@@ -204,123 +215,120 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
 
     showDialog(
       context: context,
-      builder: (context) =>
-          StatefulBuilder(
-            builder: (context, setState) {
-              return AlertDialog(
-                title: Text('Управление прогрессом: ${widget.task.title}'),
-                content: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: Text('Управление прогрессом: ${widget.task.title}'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Прогресс: $tempCompletedSteps/${widget.task.totalSteps}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  LinearProgressIndicator(
+                    value: widget.task.totalSteps > 0
+                        ? tempCompletedSteps / widget.task.totalSteps
+                        : 0.0,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      Text(
-                        'Прогресс: $tempCompletedSteps/${widget.task
-                            .totalSteps}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      LinearProgressIndicator(
-                        value: widget.task.totalSteps > 0
-                            ? tempCompletedSteps / widget.task.totalSteps
-                            : 0.0,
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Сброс'),
-                            onPressed: () {
-                              setState(() {
-                                tempCompletedSteps = 0;
-                              });
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.grey,
-                            ),
-                          ),
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.remove),
-                            label: const Text('1'),
-                            onPressed: tempCompletedSteps > 0
-                                ? () {
-                              setState(() {
-                                tempCompletedSteps--;
-                              });
-                            }
-                                : null,
-                          ),
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.add),
-                            label: const Text('1'),
-                            onPressed: tempCompletedSteps <
-                                widget.task.totalSteps
-                                ? () {
-                              setState(() {
-                                tempCompletedSteps++;
-                              });
-                            }
-                                : null,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        decoration: InputDecoration(
-                          labelText: 'Установить точное значение',
-                          hintText: 'Введите от 0 до ${widget.task.totalSteps}',
-                          border: const OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.number,
-                        onChanged: (value) {
-                          final newValue =
-                              int.tryParse(value) ?? tempCompletedSteps;
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Сброс'),
+                        onPressed: () {
                           setState(() {
-                            tempCompletedSteps =
-                                newValue.clamp(0, widget.task.totalSteps);
+                            tempCompletedSteps = 0;
                           });
                         },
-                      ),
-                      const SizedBox(height: 12),
-                      if (widget.task.totalSteps > 1) ...[
-                        const Text('Или используйте слайдер:'),
-                        const SizedBox(height: 8),
-                        Slider(
-                          value: tempCompletedSteps.toDouble(),
-                          min: 0,
-                          max: widget.task.totalSteps.toDouble(),
-                          divisions: widget.task.totalSteps,
-                          label: '$tempCompletedSteps',
-                          onChanged: (value) {
-                            setState(() {
-                              tempCompletedSteps = value.toInt();
-                            });
-                          },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey,
                         ),
-                      ],
+                      ),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.remove),
+                        label: const Text('1'),
+                        onPressed: tempCompletedSteps > 0
+                            ? () {
+                                setState(() {
+                                  tempCompletedSteps--;
+                                });
+                              }
+                            : null,
+                      ),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.add),
+                        label: const Text('1'),
+                        onPressed: tempCompletedSteps < widget.task.totalSteps
+                            ? () {
+                                setState(() {
+                                  tempCompletedSteps++;
+                                });
+                              }
+                            : null,
+                      ),
                     ],
                   ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Отмена'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      _updateTaskSteps(tempCompletedSteps);
-                      Navigator.pop(context);
+                  const SizedBox(height: 16),
+                  TextField(
+                    decoration: InputDecoration(
+                      labelText: 'Установить точное значение',
+                      hintText: 'Введите от 0 до ${widget.task.totalSteps}',
+                      border: const OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (value) {
+                      final newValue =
+                          int.tryParse(value) ?? tempCompletedSteps;
+                      setState(() {
+                        tempCompletedSteps =
+                            newValue.clamp(0, widget.task.totalSteps);
+                      });
                     },
-                    child: const Text('Сохранить'),
                   ),
+                  const SizedBox(height: 12),
+                  if (widget.task.totalSteps > 1) ...[
+                    const Text('Или используйте слайдер:'),
+                    const SizedBox(height: 8),
+                    Slider(
+                      value: tempCompletedSteps.toDouble(),
+                      min: 0,
+                      max: widget.task.totalSteps.toDouble(),
+                      divisions: widget.task.totalSteps,
+                      label: '$tempCompletedSteps',
+                      onChanged: (value) {
+                        setState(() {
+                          tempCompletedSteps = value.toInt();
+                        });
+                      },
+                    ),
+                  ],
                 ],
-              );
-            },
-          ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Отмена'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  _updateTaskSteps(tempCompletedSteps);
+                  Navigator.pop(context);
+                },
+                child: const Text('Сохранить'),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -329,194 +337,226 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
     final hasSubTasks = widget.task.subTasks.isNotEmpty;
     final indent = widget.level * 16.0;
 
-    return Card(
+    return Container(
       margin: EdgeInsets.only(
-        left: indent + 8,
-        right: 8,
-        top: 2,
-        bottom: 2,
+        left: indent + 6, // Уменьшил с 8 до 6
+        right: 6, // Уменьшил с 8 до 6
+        top: 1, // Уменьшил с 2 до 1
+        bottom: 1, // Уменьшил с 2 до 1
       ),
-      elevation: 1,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ✅ КОМПАКТНЫЙ КОНТЕЙНЕР БЕЗ ГРАНИЦ
+          Container(
+            padding: const EdgeInsets.all(8), // Уменьшил с 12 до 8
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (hasSubTasks)
-                  IconButton(
-                    icon: Icon(
-                      _isExpanded ? Icons.expand_less : Icons.expand_more,
-                      size: 18,
-                    ),
-                    onPressed: _toggleExpanded,
-                    padding: EdgeInsets.zero,
-                    constraints:
-                    const BoxConstraints(minWidth: 32, minHeight: 32),
-                  )
-                else
-                  SizedBox(
-                    width: 32,
-                    child: Center(
-                      child: Icon(
-                        Icons.circle,
-                        size: 4,
-                        color: Colors.grey.shade400,
-                      ),
-                    ),
-                  ),
-                TaskProgressWidget(
-                  task: widget.task,
-                  onToggle: _toggleTaskCompletion,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              widget.task.title,
-                              style: TextStyle(
-                                fontSize: 14 - (widget.level * 0.3),
-                                fontWeight: widget.level == 0
-                                    ? FontWeight.w500
-                                    : FontWeight.w400,
-                                decoration: widget.task.isCompleted &&
-                                    widget.task.type == TaskType.single
-                                    ? TextDecoration.lineThrough
-                                    : TextDecoration.none,
-                              ),
-                            ),
-                          ),
-                          if (hasSubTasks)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 4, vertical: 1),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.shade50,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                '${widget.task.subTasks.length}',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.blue,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      if (widget.task.description.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          widget.task.description,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey.shade600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
                 Row(
-                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (hasSubTasks)
                       IconButton(
                         icon: Icon(
-                          _isExpanded ? Icons.unfold_less : Icons.unfold_more,
-                          size: 16,
-                          color: Colors.green,
+                          _isExpanded ? Icons.expand_less : Icons.expand_more,
+                          size: 16, // Уменьшил с 18 до 16
                         ),
                         onPressed: _toggleExpanded,
-                        tooltip: _isExpanded
-                            ? 'Свернуть подзадачи'
-                            : 'Развернуть подзадачи',
                         padding: EdgeInsets.zero,
-                        constraints:
-                        const BoxConstraints(minWidth: 32, minHeight: 32),
+                        constraints: const BoxConstraints(
+                            minWidth: 28, minHeight: 28), // Уменьшил
+                      )
+                    else
+                      SizedBox(
+                        width: 28, // Уменьшил с 32 до 28
+                        child: Center(
+                          child: Icon(
+                            Icons.circle,
+                            size: 3, // Уменьшил с 4 до 3
+                            color: Colors.grey.shade400,
+                          ),
+                        ),
                       ),
-                    if (widget.task.canAddSubTask)
-                      IconButton(
-                        icon: const Icon(Icons.add, size: 16),
-                        onPressed: _addSubTask,
-                        tooltip: 'Добавить подзадачу',
-                        padding: EdgeInsets.zero,
-                        constraints:
-                        const BoxConstraints(minWidth: 32, minHeight: 32),
-                      ),
-                    if (widget.task.type == TaskType.stepByStep)
-                      IconButton(
-                        icon: const Icon(Icons.play_circle_outline,
-                            color: Colors.purple, size: 25),
-                        onPressed: _manageTaskSteps,
-                        tooltip: 'Управление шагами',
-                        padding: EdgeInsets.zero,
-                        constraints:
-                        const BoxConstraints(minWidth: 40, minHeight: 40),
-                      ),
-                    IconButton(
-                      icon:
-                      const Icon(Icons.edit, size: 16, color: Colors.blue),
-                      onPressed: _editTask,
-                      tooltip: 'Редактировать',
-                      padding: EdgeInsets.zero,
-                      constraints:
-                      const BoxConstraints(minWidth: 32, minHeight: 32),
+
+                    TaskProgressWidget(
+                      task: widget.task,
+                      onToggle: _toggleTaskCompletion,
                     ),
-                    IconButton(
-                      icon:
-                      const Icon(Icons.delete, size: 16, color: Colors.red),
-                      onPressed: widget.onTaskDeleted,
-                      tooltip: 'Удалить',
-                      padding: EdgeInsets.zero,
-                      constraints:
-                      const BoxConstraints(minWidth: 32, minHeight: 32),
+                    const SizedBox(width: 6), // Уменьшил с 8 до 6
+
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  widget.task.title,
+                                  style: TextStyle(
+                                    fontSize: 13 -
+                                        (widget.level *
+                                            0.2), // Уменьшил базовый размер
+                                    fontWeight: widget.level == 0
+                                        ? FontWeight.w500
+                                        : FontWeight.w400,
+                                    decoration: widget.task.isCompleted &&
+                                            widget.task.type == TaskType.single
+                                        ? TextDecoration.lineThrough
+                                        : TextDecoration.none,
+                                  ),
+                                ),
+                              ),
+                              if (hasSubTasks)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 3, vertical: 1), // Уменьшил
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade50,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '${widget.task.subTasks.length}',
+                                    style: const TextStyle(
+                                      fontSize: 9, // Уменьшил с 10 до 9
+                                      color: Colors.blue,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          if (widget.task.description.isNotEmpty) ...[
+                            const SizedBox(height: 1), // Уменьшил с 2 до 1
+                            Text(
+                              widget.task.description,
+                              style: TextStyle(
+                                fontSize: 10, // Уменьшил с 11 до 10
+                                color: Colors.grey.shade600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (hasSubTasks)
+                          IconButton(
+                            icon: Icon(
+                              _isExpanded
+                                  ? Icons.unfold_less
+                                  : Icons.unfold_more,
+                              size: 14, // Уменьшил с 16 до 14
+                              color: Colors.green,
+                            ),
+                            onPressed: _toggleExpanded,
+                            tooltip: _isExpanded
+                                ? 'Свернуть подзадачи'
+                                : 'Развернуть подзадачи',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                                minWidth: 28, minHeight: 28), // Уменьшил
+                          ),
+                        if (widget.task.canAddSubTask)
+                          IconButton(
+                            icon: const Icon(Icons.add, size: 14),
+                            // Уменьшил с 16 до 14
+                            onPressed: _addSubTask,
+                            tooltip: 'Добавить подзадачу',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                                minWidth: 28, minHeight: 28), // Уменьшил
+                          ),
+                        if (widget.task.type == TaskType.stepByStep)
+                          IconButton(
+                            icon: const Icon(Icons.play_circle_outline,
+                                color: Colors.purple, size: 22),
+                            // Уменьшил с 25 до 22
+                            onPressed: _manageTaskSteps,
+                            tooltip: 'Управление шагами',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                                minWidth: 36, minHeight: 36), // Уменьшил
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.edit,
+                              size: 14, color: Colors.blue),
+                          // Уменьшил
+                          onPressed: _editTask,
+                          tooltip: 'Редактировать',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                              minWidth: 28, minHeight: 28), // Уменьшил
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete,
+                              size: 14, color: Colors.red),
+                          // Уменьшил
+                          onPressed: widget.onTaskDeleted,
+                          tooltip: 'Удалить',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                              minWidth: 28, minHeight: 28), // Уменьшил
+                        ),
+                      ],
                     ),
                   ],
                 ),
+
+                // ✅ КОМПАКТНОЕ ПОДЧЕРКИВАНИЕ
+                Container(
+                  margin: const EdgeInsets.only(top: 6), // Уменьшил с 8 до 6
+                  height: widget.level == 0 ? 2 : 1, // Уменьшил толщину
+                  decoration: BoxDecoration(
+                    gradient: widget.level == 0
+                        ? LinearGradient(
+                            colors: [
+                              Colors.blue.shade300,
+                              Colors.blue.shade100,
+                            ],
+                          )
+                        : LinearGradient(
+                            colors: [
+                              Colors.grey.shade400,
+                              Colors.grey.shade200,
+                            ],
+                          ),
+                    borderRadius: BorderRadius.circular(1),
+                  ),
+                ),
               ],
             ),
-            if (widget.level > 0)
-              Container(
-                margin:
-                EdgeInsets.only(left: 40 + (widget.level - 1) * 16, top: 4),
-                height: 1,
-                color: Colors.grey.shade400,
-              ),
-            // ✅ РЕКУРСИВНОЕ ОТОБРАЖЕНИЕ ВСЕХ ПОДЗАДАЧ ПРИ РАСКРЫТИИ
-            if (_isExpanded && hasSubTasks) ...[
-              const SizedBox(height: 8),
-              ...widget.task.subTasks
-                  .asMap()
-                  .entries
-                  .map((entry) {
-                final subTaskIndex = entry.key;
-                final subTask = entry.value;
+          ),
 
-                return ExpandableTaskCard(
-                  task: subTask,
-                  taskIndex: subTaskIndex,
-                  onTaskUpdated: (updatedSubTask) =>
-                      _updateSubTask(subTaskIndex, updatedSubTask),
-                  onTaskDeleted: () => _deleteSubTask(subTaskIndex),
-                  level: widget.level + 1,
-                  forceExpanded: widget
-                      .forceExpanded, // ← ПЕРЕДАЕМ ГЛОБАЛЬНОЕ СОСТОЯНИЕ ВСЕМ ПОДЗАДАЧАМ
-                );
-              }),
-            ],
+          // ✅ РЕКУРСИВНОЕ ОТОБРАЖЕНИЕ ВСЕХ ПОДЗАДАЧ ПРИ РАСКРЫТИИ
+          if (_isExpanded && hasSubTasks) ...[
+            const SizedBox(height: 8),
+            ...widget.task.subTasks.asMap().entries.map((entry) {
+              final subTaskIndex = entry.key;
+              final subTask = entry.value;
+
+              return ExpandableTaskCard(
+                task: subTask,
+                taskIndex: subTaskIndex,
+                onTaskUpdated: (updatedSubTask) =>
+                    _updateSubTask(subTaskIndex, updatedSubTask),
+                onTaskDeleted: () => _deleteSubTask(subTaskIndex),
+                level: widget.level + 1,
+                forceExpanded: widget.forceExpanded,
+              );
+            }),
           ],
-        ),
+        ],
       ),
     );
   }
