@@ -70,28 +70,11 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
     final updatedTask =
         widget.task.copyWith(isCompleted: !widget.task.isCompleted);
 
-    // ✅ АВТОМАТИЧЕСКОЕ ОБНОВЛЕНИЕ СТАТУСА ПОДЗАДАЧ
-    if (updatedTask.isCompleted && updatedTask.subTasks.isNotEmpty) {
-      // Если задача завершена, завершаем все подзадачи
-      final updatedSubTasks = _completeAllSubTasks(updatedTask.subTasks);
-      final finalTask = updatedTask.copyWith(subTasks: updatedSubTasks);
-      widget.onTaskUpdated(finalTask);
-    } else {
-      widget.onTaskUpdated(updatedTask);
-    }
+    // ✅ ИСПРАВЛЕНО: Прогресс родительских задач НЕ влияет на дочерние
+    // Каждая задача управляется независимо
+    widget.onTaskUpdated(updatedTask);
   }
 
-  // ✅ РЕКУРСИВНОЕ ЗАВЕРШЕНИЕ ВСЕХ ПОДЗАДАЧ
-  List<Task> _completeAllSubTasks(List<Task> subTasks) {
-    return subTasks.map((subTask) {
-      final completedSubTasks = _completeAllSubTasks(subTask.subTasks);
-      return subTask.copyWith(
-        isCompleted: true,
-        subTasks: completedSubTasks,
-        completedSteps: subTask.totalSteps, // Для stepByStep задач
-      );
-    }).toList();
-  }
 
   void _updateTaskSteps(int newCompletedSteps) {
     final updatedTask = widget.task.copyWith(completedSteps: newCompletedSteps);
