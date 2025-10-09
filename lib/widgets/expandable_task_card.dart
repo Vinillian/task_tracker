@@ -1,8 +1,8 @@
 // widgets/expandable_task_card.dart
 import 'package:flutter/material.dart';
-
 import '../models/task.dart';
 import '../models/task_type.dart';
+import '../services/task_service.dart';
 import 'add_task_dialog.dart';
 import 'edit_dialogs.dart';
 import 'task_progress_widget.dart';
@@ -12,6 +12,7 @@ class ExpandableTaskCard extends StatefulWidget {
   final int taskIndex;
   final Function(Task) onTaskUpdated;
   final Function() onTaskDeleted;
+  final TaskService taskService; // ✅ ДОБАВЛЯЕМ TaskService
   final int level;
   final bool? forceExpanded;
 
@@ -21,6 +22,7 @@ class ExpandableTaskCard extends StatefulWidget {
     required this.taskIndex,
     required this.onTaskUpdated,
     required this.onTaskDeleted,
+    required this.taskService,
     required this.level,
     this.forceExpanded,
   });
@@ -31,27 +33,24 @@ class ExpandableTaskCard extends StatefulWidget {
 
 class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
   bool _isExpanded = false;
+  List<Task> _subTasks = []; // ✅ Кэшируем подзадачи
 
-  Color _getLevelColor(int level) {
-    switch (level) {
-      case 1:
-        return Colors.blue.shade300;
-      case 2:
-        return Colors.green.shade300;
-      case 3:
-        return Colors.orange.shade300;
-      case 4:
-        return Colors.purple.shade300;
-      default:
-        return Colors.grey.shade300;
-    }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSubTasks(); // ✅ Загружаем подзадачи при инициализации
+  }
+
+  void _loadSubTasks() {
+    _subTasks = widget.taskService.getSubTasks(widget.task.id);
   }
 
   @override
   void didUpdateWidget(ExpandableTaskCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // ✅ ИСПРАВЛЕНО: Синхронизация ТОЛЬКО если forceExpanded явно указан
-    // и он изменился по сравнению с предыдущим значением
+    _loadSubTasks(); // ✅ Перезагружаем подзадачи при обновлении
+
     if (widget.forceExpanded != null &&
         oldWidget.forceExpanded != widget.forceExpanded) {
       setState(() {
@@ -67,21 +66,15 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
   }
 
   void _toggleTaskCompletion() {
-    final updatedTask =
-        widget.task.copyWith(isCompleted: !widget.task.isCompleted);
-
-    // ✅ ИСПРАВЛЕНО: Прогресс родительских задач НЕ влияет на дочерние
-    // Каждая задача управляется независимо
+    final updatedTask = widget.task.copyWith(isCompleted: !widget.task.isCompleted);
     widget.onTaskUpdated(updatedTask);
   }
-
 
   void _updateTaskSteps(int newCompletedSteps) {
     final updatedTask = widget.task.copyWith(completedSteps: newCompletedSteps);
 
     // ✅ АВТОМАТИЧЕСКОЕ ЗАВЕРШЕНИЕ ПРИ 100% ПРОГРЕССЕ
-    if (newCompletedSteps >= widget.task.totalSteps &&
-        widget.task.totalSteps > 0) {
+    if (newCompletedSteps >= widget.task.totalSteps && widget.task.totalSteps > 0) {
       updatedTask.isCompleted = true;
     }
 
@@ -108,17 +101,17 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
     showDialog(
       context: context,
       builder: (context) => AddTaskDialog(
-        onTaskCreated:
-            (String title, String description, TaskType type, int steps) {
-          _createSubTask(title, description, type, steps);
+        onTaskCreated: (String title, String description, TaskType type, int steps, String? parentId) {
+          _createSubTask(title, description, type, steps, widget.task.projectId, parentId);
         },
+        projectId: widget.task.projectId,
+        parentId: widget.task.id,
       ),
     );
   }
 
-  void _createSubTask(
-      String title, String description, TaskType type, int totalSteps) {
-    if (!widget.task.canAddSubTask) {
+  void _createSubTask(String title, String description, TaskType type, int totalSteps, String? projectId, String? parentId) {
+    if (!widget.taskService.canAddSubTask(widget.task.id)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Достигнут максимальный уровень вложенности!'),
@@ -130,6 +123,8 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
 
     final newSubTask = Task(
       id: '${widget.task.id}_${DateTime.now().millisecondsSinceEpoch}',
+      parentId: parentId ?? widget.task.id,
+      projectId: projectId ?? widget.task.projectId,
       title: title,
       description: description,
       isCompleted: false,
@@ -139,19 +134,13 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
       maxDepth: widget.task.maxDepth,
     );
 
-    final updatedTask = widget.task.copyWith(
-      subTasks: [...widget.task.subTasks, newSubTask],
-    );
+    widget.taskService.addTask(newSubTask);
+    _loadSubTasks();
 
-    // ✅ ИСПРАВЛЕНО: Автоматическое раскрытие ТОЛЬКО текущей задачи
-    // НЕ зависит от глобального состояния "развернуть все"
     setState(() {
-      _isExpanded = true; // Всегда раскрываем при добавлении подзадачи
+      _isExpanded = true;
     });
 
-    widget.onTaskUpdated(updatedTask);
-
-    // ✅ АВТОПРОКРУТКА К НОВОЙ ПОДЗАДАЧЕ
     if (mounted) {
       Future.delayed(const Duration(milliseconds: 100), () {
         if (mounted) {
@@ -175,22 +164,15 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
     );
   }
 
-  void _updateSubTask(int subTaskIndex, Task updatedSubTask) {
-    final updatedSubTasks = List<Task>.from(widget.task.subTasks);
-    updatedSubTasks[subTaskIndex] = updatedSubTask;
-    final updatedTask = widget.task.copyWith(subTasks: updatedSubTasks);
-
-    // ✅ АВТОМАТИЧЕСКОЕ ОБНОВЛЕНИЕ СТАТУСА РОДИТЕЛЬСКОЙ ЗАДАЧИ
-    updatedTask.updateCompletionStatus();
-
-    widget.onTaskUpdated(updatedTask);
+  void _updateSubTask(Task updatedSubTask) {
+    widget.taskService.updateTask(updatedSubTask);
+    widget.onTaskUpdated(widget.task); // Уведомляем родителя об изменении
   }
 
-  void _deleteSubTask(int subTaskIndex) {
-    final updatedSubTasks = List<Task>.from(widget.task.subTasks)
-      ..removeAt(subTaskIndex);
-    final updatedTask = widget.task.copyWith(subTasks: updatedSubTasks);
-    widget.onTaskUpdated(updatedTask);
+  void _deleteSubTask(String subTaskId) {
+    widget.taskService.removeTask(subTaskId);
+    _loadSubTasks(); // ✅ Перезагружаем подзадачи
+    widget.onTaskUpdated(widget.task); // Уведомляем родителя об изменении
   }
 
   void _manageTaskSteps() {
@@ -240,10 +222,10 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
                         label: const Text('1'),
                         onPressed: tempCompletedSteps > 0
                             ? () {
-                                setState(() {
-                                  tempCompletedSteps--;
-                                });
-                              }
+                          setState(() {
+                            tempCompletedSteps--;
+                          });
+                        }
                             : null,
                       ),
                       ElevatedButton.icon(
@@ -251,10 +233,10 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
                         label: const Text('1'),
                         onPressed: tempCompletedSteps < widget.task.totalSteps
                             ? () {
-                                setState(() {
-                                  tempCompletedSteps++;
-                                });
-                              }
+                          setState(() {
+                            tempCompletedSteps++;
+                          });
+                        }
                             : null,
                       ),
                     ],
@@ -268,11 +250,9 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
                     ),
                     keyboardType: TextInputType.number,
                     onChanged: (value) {
-                      final newValue =
-                          int.tryParse(value) ?? tempCompletedSteps;
+                      final newValue = int.tryParse(value) ?? tempCompletedSteps;
                       setState(() {
-                        tempCompletedSteps =
-                            newValue.clamp(0, widget.task.totalSteps);
+                        tempCompletedSteps = newValue.clamp(0, widget.task.totalSteps);
                       });
                     },
                   ),
@@ -317,22 +297,21 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
 
   @override
   Widget build(BuildContext context) {
-    final hasSubTasks = widget.task.subTasks.isNotEmpty;
+    final hasSubTasks = _subTasks.isNotEmpty;
     final indent = widget.level * 16.0;
 
     return Container(
       margin: EdgeInsets.only(
-        left: indent + 6, // Уменьшил с 8 до 6
-        right: 6, // Уменьшил с 8 до 6
-        top: 1, // Уменьшил с 2 до 1
-        bottom: 1, // Уменьшил с 2 до 1
+        left: indent + 6,
+        right: 6,
+        top: 1,
+        bottom: 1,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ✅ КОМПАКТНЫЙ КОНТЕЙНЕР БЕЗ ГРАНИЦ
           Container(
-            padding: const EdgeInsets.all(8), // Уменьшил с 12 до 8
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: Colors.grey.shade50,
               borderRadius: BorderRadius.circular(6),
@@ -347,20 +326,19 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
                       IconButton(
                         icon: Icon(
                           _isExpanded ? Icons.expand_less : Icons.expand_more,
-                          size: 16, // Уменьшил с 18 до 16
+                          size: 16,
                         ),
                         onPressed: _toggleExpanded,
                         padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                            minWidth: 28, minHeight: 28), // Уменьшил
+                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                       )
                     else
                       SizedBox(
-                        width: 28, // Уменьшил с 32 до 28
+                        width: 28,
                         child: Center(
                           child: Icon(
                             Icons.circle,
-                            size: 3, // Уменьшил с 4 до 3
+                            size: 3,
                             color: Colors.grey.shade400,
                           ),
                         ),
@@ -370,7 +348,7 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
                       task: widget.task,
                       onToggle: _toggleTaskCompletion,
                     ),
-                    const SizedBox(width: 6), // Уменьшил с 8 до 6
+                    const SizedBox(width: 6),
 
                     Expanded(
                       child: Column(
@@ -382,14 +360,9 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
                                 child: Text(
                                   widget.task.title,
                                   style: TextStyle(
-                                    fontSize: 13 -
-                                        (widget.level *
-                                            0.2), // Уменьшил базовый размер
-                                    fontWeight: widget.level == 0
-                                        ? FontWeight.w500
-                                        : FontWeight.w400,
-                                    decoration: widget.task.isCompleted &&
-                                            widget.task.type == TaskType.single
+                                    fontSize: 13 - (widget.level * 0.2),
+                                    fontWeight: widget.level == 0 ? FontWeight.w500 : FontWeight.w400,
+                                    decoration: widget.task.isCompleted && widget.task.type == TaskType.single
                                         ? TextDecoration.lineThrough
                                         : TextDecoration.none,
                                   ),
@@ -397,16 +370,15 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
                               ),
                               if (hasSubTasks)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 3, vertical: 1), // Уменьшил
+                                  padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
                                   decoration: BoxDecoration(
                                     color: Colors.blue.shade50,
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
-                                    '${widget.task.subTasks.length}',
+                                    '${_subTasks.length}',
                                     style: const TextStyle(
-                                      fontSize: 9, // Уменьшил с 10 до 9
+                                      fontSize: 9,
                                       color: Colors.blue,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -415,11 +387,11 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
                             ],
                           ),
                           if (widget.task.description.isNotEmpty) ...[
-                            const SizedBox(height: 1), // Уменьшил с 2 до 1
+                            const SizedBox(height: 1),
                             Text(
                               widget.task.description,
                               style: TextStyle(
-                                fontSize: 10, // Уменьшил с 11 до 10
+                                fontSize: 10,
                                 color: Colors.grey.shade600,
                               ),
                               maxLines: 1,
@@ -436,84 +408,67 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
                         if (hasSubTasks)
                           IconButton(
                             icon: Icon(
-                              _isExpanded
-                                  ? Icons.unfold_less
-                                  : Icons.unfold_more,
-                              size: 14, // Уменьшил с 16 до 14
+                              _isExpanded ? Icons.unfold_less : Icons.unfold_more,
+                              size: 14,
                               color: Colors.green,
                             ),
                             onPressed: _toggleExpanded,
-                            tooltip: _isExpanded
-                                ? 'Свернуть подзадачи'
-                                : 'Развернуть подзадачи',
+                            tooltip: _isExpanded ? 'Свернуть подзадачи' : 'Развернуть подзадачи',
                             padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                                minWidth: 28, minHeight: 28), // Уменьшил
+                            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                           ),
-                        if (widget.task.canAddSubTask)
+                        if (widget.taskService.canAddSubTask(widget.task.id))
                           IconButton(
                             icon: const Icon(Icons.add, size: 14),
-                            // Уменьшил с 16 до 14
                             onPressed: _addSubTask,
                             tooltip: 'Добавить подзадачу',
                             padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                                minWidth: 28, minHeight: 28), // Уменьшил
+                            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                           ),
                         if (widget.task.type == TaskType.stepByStep)
                           IconButton(
-                            icon: const Icon(Icons.play_circle_outline,
-                                color: Colors.purple, size: 22),
-                            // Уменьшил с 25 до 22
+                            icon: const Icon(Icons.play_circle_outline, color: Colors.purple, size: 22),
                             onPressed: _manageTaskSteps,
                             tooltip: 'Управление шагами',
                             padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                                minWidth: 36, minHeight: 36), // Уменьшил
+                            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                           ),
                         IconButton(
-                          icon: const Icon(Icons.edit,
-                              size: 14, color: Colors.blue),
-                          // Уменьшил
+                          icon: const Icon(Icons.edit, size: 14, color: Colors.blue),
                           onPressed: _editTask,
                           tooltip: 'Редактировать',
                           padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                              minWidth: 28, minHeight: 28), // Уменьшил
+                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete,
-                              size: 14, color: Colors.red),
-                          // Уменьшил
+                          icon: const Icon(Icons.delete, size: 14, color: Colors.red),
                           onPressed: widget.onTaskDeleted,
                           tooltip: 'Удалить',
                           padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                              minWidth: 28, minHeight: 28), // Уменьшил
+                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                         ),
                       ],
                     ),
                   ],
                 ),
 
-                // ✅ КОМПАКТНОЕ ПОДЧЕРКИВАНИЕ
                 Container(
-                  margin: const EdgeInsets.only(top: 6), // Уменьшил с 8 до 6
-                  height: widget.level == 0 ? 2 : 1, // Уменьшил толщину
+                  margin: const EdgeInsets.only(top: 6),
+                  height: widget.level == 0 ? 2 : 1,
                   decoration: BoxDecoration(
                     gradient: widget.level == 0
                         ? LinearGradient(
-                            colors: [
-                              Colors.blue.shade300,
-                              Colors.blue.shade100,
-                            ],
-                          )
+                      colors: [
+                        Colors.blue.shade300,
+                        Colors.blue.shade100,
+                      ],
+                    )
                         : LinearGradient(
-                            colors: [
-                              Colors.grey.shade400,
-                              Colors.grey.shade200,
-                            ],
-                          ),
+                      colors: [
+                        Colors.grey.shade400,
+                        Colors.grey.shade200,
+                      ],
+                    ),
                     borderRadius: BorderRadius.circular(1),
                   ),
                 ),
@@ -521,19 +476,16 @@ class _ExpandableTaskCardState extends State<ExpandableTaskCard> {
             ),
           ),
 
-          // ✅ РЕКУРСИВНОЕ ОТОБРАЖЕНИЕ ВСЕХ ПОДЗАДАЧ ПРИ РАСКРЫТИИ
+          // ✅ РЕКУРСИВНОЕ ОТОБРАЖЕНИЕ ПОДЗАДАЧ ИЗ TASK SERVICE
           if (_isExpanded && hasSubTasks) ...[
             const SizedBox(height: 8),
-            ...widget.task.subTasks.asMap().entries.map((entry) {
-              final subTaskIndex = entry.key;
-              final subTask = entry.value;
-
+            ..._subTasks.map((subTask) {
               return ExpandableTaskCard(
                 task: subTask,
-                taskIndex: subTaskIndex,
-                onTaskUpdated: (updatedSubTask) =>
-                    _updateSubTask(subTaskIndex, updatedSubTask),
-                onTaskDeleted: () => _deleteSubTask(subTaskIndex),
+                taskIndex: 0, // Индекс не важен для подзадач
+                onTaskUpdated: _updateSubTask,
+                onTaskDeleted: () => _deleteSubTask(subTask.id),
+                taskService: widget.taskService,
                 level: widget.level + 1,
                 forceExpanded: widget.forceExpanded,
               );

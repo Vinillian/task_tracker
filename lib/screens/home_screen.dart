@@ -1,8 +1,7 @@
 // screens/home_screen.dart
 import 'package:flutter/material.dart';
 import '../models/project.dart';
-import '../models/task.dart';
-import '../models/task_type.dart';
+import '../services/task_service.dart';
 import '../utils/storage_helper.dart';
 import '../widgets/add_project_dialog.dart';
 import 'project_detail_screen.dart';
@@ -16,6 +15,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   List<Project> projects = [];
+  final TaskService _taskService = TaskService(); // ✅ ДОБАВЛЯЕМ TaskService
   bool _isLoading = true;
 
   @override
@@ -39,6 +39,9 @@ class _HomeScreenState extends State<HomeScreen> {
           }).toList();
         });
         print('✅ Загружено ${projects.length} проектов');
+
+        // ✅ ЗАГРУЗКА ДЕМО-ЗАДАЧ для тестирования
+        _loadDemoTasks();
       } else {
         _createDemoProjects();
       }
@@ -52,42 +55,33 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _loadDemoTasks() {
+    // ✅ ЗАГРУЗКА ДЕМО-ЗАДАЧ для всех проектов
+    for (final project in projects) {
+      _taskService.loadDemoTasks(project.id);
+    }
+    print('✅ Загружены демо-задачи для ${projects.length} проектов');
+  }
+
   void _createDemoProjects() {
     setState(() {
       projects = [
         Project(
-          id: '1',
+          id: 'project_1',
           name: 'Рабочие задачи',
           description: 'Задачи по работе',
           createdAt: DateTime.now(),
-          tasks: [
-            Task(
-              id: '1',
-              title: 'Создать отчет',
-              description: 'Подготовить еженедельный отчет',
-              isCompleted: false,
-              type: TaskType.single,
-            ),
-          ],
         ),
         Project(
-          id: '2',
+          id: 'project_2',
           name: 'Личные дела',
           description: 'Персональные задачи',
           createdAt: DateTime.now(),
-          tasks: [
-            Task(
-              id: '2',
-              title: 'Купить продукты',
-              description: 'Молоко, хлеб, фрукты',
-              isCompleted: false,
-              type: TaskType.single,
-            ),
-          ],
         ),
       ];
     });
     _saveProjects();
+    _loadDemoTasks(); // ✅ ДОБАВЛЯЕМ задачи после создания проектов
   }
 
   Future<void> _saveProjects() async {
@@ -109,10 +103,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void _createProject(String name, String description) {
     setState(() {
       final newProject = Project(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: 'project_${DateTime.now().millisecondsSinceEpoch}',
         name: name,
         description: description,
-        tasks: [],
         createdAt: DateTime.now(),
       );
 
@@ -146,6 +139,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 projects.clear();
               });
               StorageHelper.clearData();
+              // ✅ ОЧИСТКА всех задач
+              _taskService.clearAllTasks();
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -176,71 +171,19 @@ class _HomeScreenState extends State<HomeScreen> {
           project: projects[index],
           projectIndex: index,
           onProjectUpdated: (updatedProject) => _updateProject(index, updatedProject),
+          taskService: _taskService, // ✅ ПЕРЕДАЕМ TaskService
         ),
       ),
     );
   }
 
-
-  @override
-  Widget build(BuildContext context) {
-    print('🏠 Building home screen with ${projects.length} projects'); // ✅ ДЛЯ ОТЛАДКИ
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Task Tracker 💾'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _addNewProject,
-            tooltip: 'Создать проект',
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete, color: Colors.red),
-            onPressed: _clearAllData,
-            tooltip: 'Очистить все данные',
-          ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : projects.isEmpty
-          ? const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.folder_open, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text(
-              'Нет проектов',
-              style: TextStyle(fontSize: 18, color: Colors.grey),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Нажмите + чтобы создать первый проект',
-              style: TextStyle(color: Colors.grey),
-            ),
-          ],
-        ),
-      )
-          : ListView.builder( // ✅ УБЕДИТЕСЬ ЧТО ЭТО ListView
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: projects.length,
-        itemBuilder: (context, index) {
-          print('📦 Building project card $index'); // ✅ ДЛЯ ОТЛАДКИ
-          return _buildProjectCard(index);
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addNewProject,
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-
-  // ✅ ДОБАВИТЬ ЭТОТ МЕТОД В КЛАСС _HomeScreenState (после _navigateToProjectDetail)
+  // ✅ ОБНОВЛЯЕМ отображение прогресса проекта
   Widget _buildProjectCard(int index) {
     final project = projects[index];
+    final progress = _taskService.getProjectProgress(project.id);
+    final totalTasks = _taskService.getProjectTotalTasks(project.id);
+    final completedTasks = _taskService.getProjectCompletedTasks(project.id);
+
     return Card(
       elevation: 2,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -300,7 +243,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '${(project.progress * 100).toInt()}%',
+                    '${(progress * 100).toInt()}%',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -308,7 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${project.completedTasks}/${project.totalTasks}',
+                    '$completedTasks/$totalTasks',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey.shade600,
@@ -322,14 +265,67 @@ class _HomeScreenState extends State<HomeScreen> {
               SizedBox(
                 width: 60,
                 child: LinearProgressIndicator(
-                  value: project.progress,
+                  value: progress,
                   backgroundColor: Colors.grey.shade200,
-                  color: project.progress == 1.0 ? Colors.green : Colors.blue,
+                  color: progress == 1.0 ? Colors.green : Colors.blue,
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Task Tracker 💾 (Flat Structure)'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: _addNewProject,
+            tooltip: 'Создать проект',
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete, color: Colors.red),
+            onPressed: _clearAllData,
+            tooltip: 'Очистить все данные',
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : projects.isEmpty
+          ? const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.folder_open, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              'Нет проектов',
+              style: TextStyle(fontSize: 18, color: Colors.grey),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Нажмите + чтобы создать первый проект',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ],
+        ),
+      )
+          : ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        itemCount: projects.length,
+        itemBuilder: (context, index) {
+          return _buildProjectCard(index);
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _addNewProject,
+        child: const Icon(Icons.add),
       ),
     );
   }
