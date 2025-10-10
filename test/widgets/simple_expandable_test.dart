@@ -2,13 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:task_tracker/widgets/expandable_task_card.dart';
 import 'package:task_tracker/models/task.dart';
-import 'package:task_tracker/models/task_type.dart'; // ✅ ДОБАВИТЬ ЭТОТ ИМПОРТ
+import 'package:task_tracker/models/task_type.dart';
+import 'package:task_tracker/services/task_service.dart';
 
 void main() {
-  group('Simple ExpandableTaskCard Tests', () {
+  group('Simple ExpandableTaskCard Tests - Updated for Flat Structure', () {
+    late TaskService taskService;
+
+    setUp(() {
+      taskService = TaskService();
+    });
+
     testWidgets('Basic task card renders correctly', (WidgetTester tester) async {
       final simpleTask = Task(
         id: '1',
+        projectId: 'project_1',
         title: 'Simple Task',
         description: 'Simple Description',
       );
@@ -21,6 +29,7 @@ void main() {
               taskIndex: 0,
               onTaskUpdated: (task) {},
               onTaskDeleted: () {},
+              taskService: taskService,
               level: 0,
             ),
           ),
@@ -35,42 +44,13 @@ void main() {
       expect(find.byType(Checkbox), findsOneWidget);
     });
 
-    testWidgets('Task with subtasks shows expand button', (WidgetTester tester) async {
-      final taskWithSubtasks = Task(
-        id: '1',
-        title: 'Parent Task',
-        description: 'Has subtasks',
-        subTasks: [
-          Task(id: '1-1', title: 'Child Task', description: ''),
-        ],
-      );
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: ExpandableTaskCard(
-              task: taskWithSubtasks,
-              taskIndex: 0,
-              onTaskUpdated: (task) {},
-              onTaskDeleted: () {},
-              level: 0,
-            ),
-          ),
-        ),
-      );
-
-      await tester.pumpAndSettle();
-
-      // Should show expand/collapse button when there are subtasks
-      expect(find.byIcon(Icons.expand_more), findsOneWidget);
-    });
-
     testWidgets('Step task shows progress indicator', (WidgetTester tester) async {
       final stepTask = Task(
         id: '1',
+        projectId: 'project_1',
         title: 'Step Task',
         description: 'Step Description',
-        type: TaskType.stepByStep, // ✅ Теперь TaskType определен
+        type: TaskType.stepByStep,
         totalSteps: 5,
         completedSteps: 2,
       );
@@ -83,6 +63,7 @@ void main() {
               taskIndex: 0,
               onTaskUpdated: (task) {},
               onTaskDeleted: () {},
+              taskService: taskService,
               level: 0,
             ),
           ),
@@ -94,6 +75,65 @@ void main() {
       // Should show progress for step tasks
       expect(find.text('2/5'), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    });
+
+    testWidgets('Completed task shows checkmark', (WidgetTester tester) async {
+      final completedTask = Task(
+        id: '1',
+        projectId: 'project_1',
+        title: 'Completed Task',
+        description: 'Completed Description',
+        isCompleted: true,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ExpandableTaskCard(
+              task: completedTask,
+              taskIndex: 0,
+              onTaskUpdated: (task) {},
+              onTaskDeleted: () {},
+              taskService: taskService,
+              level: 0,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Should show checked checkbox for completed tasks
+      final checkbox = tester.widget<Checkbox>(find.byType(Checkbox));
+      expect(checkbox.value, true);
+    });
+
+    testWidgets('Task with description shows description text', (WidgetTester tester) async {
+      final taskWithDescription = Task(
+        id: '1',
+        projectId: 'project_1',
+        title: 'Task with Description',
+        description: 'This is a detailed description',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ExpandableTaskCard(
+              task: taskWithDescription,
+              taskIndex: 0,
+              onTaskUpdated: (task) {},
+              onTaskDeleted: () {},
+              taskService: taskService,
+              level: 0,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('This is a detailed description'), findsOneWidget);
     });
   });
 }

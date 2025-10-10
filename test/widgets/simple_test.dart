@@ -1,4 +1,3 @@
-// test/widgets/simple_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -21,7 +20,6 @@ void main() {
       ),
     );
 
-    // Нажимаем на чекбокс
     await tester.tap(find.byType(Checkbox));
     await tester.pump();
 
@@ -43,9 +41,7 @@ void main() {
       ),
     );
 
-    // Вводим текст
     await tester.enterText(find.byType(TextField), 'Test Task');
-
     expect(inputText, 'Test Task');
   });
 

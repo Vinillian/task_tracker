@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/project.dart';
 import '../services/task_service.dart';
 import '../utils/storage_helper.dart';
+import '../utils/logger.dart';
 import '../widgets/add_project_dialog.dart';
 import 'project_detail_screen.dart';
 
@@ -15,7 +16,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   List<Project> projects = [];
-  final TaskService _taskService = TaskService(); // ✅ ДОБАВЛЯЕМ TaskService
+  final TaskService _taskService = TaskService();
   bool _isLoading = true;
 
   @override
@@ -38,15 +39,14 @@ class _HomeScreenState extends State<HomeScreen> {
             return Project.fromJson(projectData);
           }).toList();
         });
-        print('✅ Загружено ${projects.length} проектов');
+        Logger.success('Загружено ${projects.length} проектов');
 
-        // ✅ ЗАГРУЗКА ДЕМО-ЗАДАЧ для тестирования
         _loadDemoTasks();
       } else {
         _createDemoProjects();
       }
     } catch (e) {
-      print('❌ Ошибка загрузки: $e');
+      Logger.error('Ошибка загрузки проектов', e);
       _createDemoProjects();
     } finally {
       setState(() {
@@ -56,11 +56,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _loadDemoTasks() {
-    // ✅ ЗАГРУЗКА ДЕМО-ЗАДАЧ для всех проектов
     for (final project in projects) {
       _taskService.loadDemoTasks(project.id);
     }
-    print('✅ Загружены демо-задачи для ${projects.length} проектов');
+    Logger.success('Загружены демо-задачи для ${projects.length} проектов');
   }
 
   void _createDemoProjects() {
@@ -81,7 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ];
     });
     _saveProjects();
-    _loadDemoTasks(); // ✅ ДОБАВЛЯЕМ задачи после создания проектов
+    _loadDemoTasks();
   }
 
   Future<void> _saveProjects() async {
@@ -139,7 +138,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 projects.clear();
               });
               StorageHelper.clearData();
-              // ✅ ОЧИСТКА всех задач
               _taskService.clearAllTasks();
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
@@ -171,13 +169,12 @@ class _HomeScreenState extends State<HomeScreen> {
           project: projects[index],
           projectIndex: index,
           onProjectUpdated: (updatedProject) => _updateProject(index, updatedProject),
-          taskService: _taskService, // ✅ ПЕРЕДАЕМ TaskService
+          taskService: _taskService,
         ),
       ),
     );
   }
 
-  // ✅ ОБНОВЛЯЕМ отображение прогресса проекта
   Widget _buildProjectCard(int index) {
     final project = projects[index];
     final progress = _taskService.getProjectProgress(project.id);
@@ -195,7 +192,6 @@ class _HomeScreenState extends State<HomeScreen> {
           height: 80,
           child: Row(
             children: [
-              // Иконка проекта
               Container(
                 width: 40,
                 height: 40,
@@ -206,8 +202,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Icon(Icons.folder, color: Colors.blue.shade600, size: 24),
               ),
               const SizedBox(width: 12),
-
-              // Информация о проекте
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -236,8 +230,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-
-              // Прогресс и счетчики
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -260,8 +252,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               const SizedBox(width: 8),
-
-              // Прогресс-бар
               SizedBox(
                 width: 60,
                 child: LinearProgressIndicator(
