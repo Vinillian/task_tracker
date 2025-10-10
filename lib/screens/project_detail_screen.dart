@@ -1,22 +1,26 @@
 // screens/project_detail_screen.dart
 import 'package:flutter/material.dart';
+
 import '../models/project.dart';
 import '../models/task.dart';
 import '../models/task_type.dart';
-import '../widgets/task_card.dart';
 import '../widgets/add_task_dialog.dart';
 import '../widgets/edit_dialogs.dart';
+import '../widgets/expandable_task_card.dart';
+import '../services/task_service.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final Project project;
   final int projectIndex;
   final Function(Project) onProjectUpdated;
+  final TaskService taskService; // ✅ ДОБАВЛЯЕМ
 
   const ProjectDetailScreen({
     super.key,
     required this.project,
     required this.projectIndex,
     required this.onProjectUpdated,
+    required this.taskService, // ✅ ДОБАВЛЯЕМ
   });
 
   @override
@@ -25,42 +29,66 @@ class ProjectDetailScreen extends StatefulWidget {
 
 class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   late Project _project;
+  bool _allExpanded = false;
+  late TaskService _taskService; // ✅ ДОБАВЛЯЕМ
 
   @override
   void initState() {
     super.initState();
     _project = widget.project;
+    _taskService = widget.taskService; // ✅ ИНИЦИАЛИЗИРУЕМ
+  }
+
+  void _toggleAllExpanded() {
+    setState(() {
+      _allExpanded = !_allExpanded;
+    });
   }
 
   void _addTask() {
     showDialog(
       context: context,
       builder: (context) => AddTaskDialog(
-        onTaskCreated: (String title, String description, TaskType type, int steps) {
-          _createTask(title, description, type, steps);
+        onTaskCreated: (String title, String description, TaskType type, int steps, String? parentId) {
+          _createTask(title, description, type, steps, _project.id, parentId);
         },
+        projectId: _project.id,
+        parentId: null,
       ),
     );
   }
 
-  void _createTask(String title, String description, TaskType type, int totalSteps) {
-    setState(() {
-      final newTask = Task(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        title: title,
-        description: description,
-        isCompleted: false,
-        type: type,
-        totalSteps: totalSteps,
-        completedSteps: 0,
-      );
+  void _createTask(String title, String description, TaskType type, int totalSteps, String projectId, String? parentId) {
+    final newTask = Task(
+      id: 'task_${DateTime.now().millisecondsSinceEpoch}',
+      parentId: parentId, // ✅ Используем parentId
+      projectId: projectId,
+      title: title,
+      description: description,
+      isCompleted: false,
+      type: type,
+      totalSteps: totalSteps,
+      completedSteps: 0,
+    );
 
-      _project = _project.copyWith(
-        tasks: [..._project.tasks, newTask],
-      );
-    });
+    _taskService.addTask(newTask);
+    setState(() {});
 
     widget.onProjectUpdated(_project);
+
+    // ✅ АВТОПРОКРУТКА К НОВОЙ ЗАДАЧЕ
+    if (mounted) {
+      Future.delayed(const Duration(milliseconds: 100), () {
+        final scrollController = PrimaryScrollController.of(context);
+        if (scrollController.hasClients) {
+          scrollController.animateTo(
+            scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -70,76 +98,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  void _toggleTask(int taskIndex) {
-    setState(() {
-      final task = _project.tasks[taskIndex];
-      final updatedTask = task.copyWith(isCompleted: !task.isCompleted);
-      final updatedTasks = List<Task>.from(_project.tasks);
-      updatedTasks[taskIndex] = updatedTask;
 
-      _project = _project.copyWith(tasks: updatedTasks);
-    });
-
-    widget.onProjectUpdated(_project);
-  }
-
-  void _updateTaskSteps(int taskIndex, int newCompletedSteps) {
-    setState(() {
-      final updatedTasks = List<Task>.from(_project.tasks);
-      updatedTasks[taskIndex] = updatedTasks[taskIndex].copyWith(
-        completedSteps: newCompletedSteps,
-      );
-
-      _project = _project.copyWith(tasks: updatedTasks);
-    });
-
-    widget.onProjectUpdated(_project);
-  }
-
-  void _editTask(int taskIndex) {
-    showDialog(
-      context: context,
-      builder: (context) => EditTaskDialog(
-        task: _project.tasks[taskIndex],
-        onTaskUpdated: (String title, String description) {
-          _updateTask(taskIndex, title, description);
-        },
-      ),
-    );
-  }
-
-  void _updateTask(int taskIndex, String title, String description) {
-    setState(() {
-      final updatedTasks = List<Task>.from(_project.tasks);
-      updatedTasks[taskIndex] = updatedTasks[taskIndex].copyWith(
-        title: title,
-        description: description,
-      );
-
-      _project = _project.copyWith(tasks: updatedTasks);
-    });
-
-    widget.onProjectUpdated(_project);
-  }
-
-  void _deleteTask(int taskIndex) {
-    setState(() {
-      final updatedTasks = List<Task>.from(_project.tasks)..removeAt(taskIndex);
-      _project = _project.copyWith(tasks: updatedTasks);
-    });
-
-    widget.onProjectUpdated(_project);
-  }
-
-  void _updateTaskWithSubTasks(int taskIndex, Task updatedTask) {
-    setState(() {
-      final updatedTasks = List<Task>.from(_project.tasks);
-      updatedTasks[taskIndex] = updatedTask;
-      _project = _project.copyWith(tasks: updatedTasks);
-    });
-
-    widget.onProjectUpdated(_project);
-  }
 
   void _editProject() {
     showDialog(
@@ -160,25 +119,46 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Widget _buildHeader() {
+    final progress = _taskService.getProjectProgress(_project.id);
+    final totalTasks = _taskService.getProjectTotalTasks(_project.id);
+    final completedTasks = _taskService.getProjectCompletedTasks(_project.id);
+
     return Card(
       margin: const EdgeInsets.all(16),
-      child: Padding(
+      child: Container(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Row(
               children: [
-                const Icon(Icons.folder, color: Colors.blue, size: 32),
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.folder, color: Colors.blue.shade600, size: 24),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     _project.name,
                     style: const TextStyle(
-                      fontSize: 24,
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                ),
+                IconButton(
+                  icon: Icon(
+                    _allExpanded ? Icons.unfold_less : Icons.unfold_more,
+                    color: Colors.blue,
+                  ),
+                  onPressed: _toggleAllExpanded,
+                  tooltip: _allExpanded ? 'Свернуть все' : 'Развернуть все',
                 ),
                 IconButton(
                   icon: const Icon(Icons.edit, color: Colors.orange),
@@ -192,24 +172,24 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               Text(
                 _project.description,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
                   color: Colors.grey.shade600,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
             ],
             Row(
               children: [
                 Expanded(
                   child: LinearProgressIndicator(
-                    value: _project.progress,
+                    value: progress,
                     backgroundColor: Colors.grey.shade200,
-                    color: _project.progress == 1.0 ? Colors.green : Colors.blue,
+                    color: progress == 1.0 ? Colors.green : Colors.blue,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  '${(_project.progress * 100).toInt()}%',
+                  '${(progress * 100).toInt()}%',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -217,21 +197,21 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${_project.completedTasks}/${_project.totalTasks} задач выполнено',
+                  '$completedTasks/$totalTasks задач выполнено',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 12,
                     color: Colors.grey.shade600,
                   ),
                 ),
                 Text(
                   'Создан: ${_project.createdAt.day}.${_project.createdAt.month}.${_project.createdAt.year}',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 10,
                     color: Colors.grey.shade500,
                   ),
                 ),
@@ -244,7 +224,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Widget _buildTasksList() {
-    if (_project.tasks.isEmpty) {
+    final rootTasks = _taskService.getProjectTasks(_project.id)
+        .where((task) => task.parentId == null)
+        .toList();
+
+    if (rootTasks.isEmpty) {
       return const Expanded(
         child: Center(
           child: Column(
@@ -270,20 +254,32 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     return Expanded(
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _project.tasks.length,
+        itemCount: rootTasks.length,
         itemBuilder: (context, index) {
-          return TaskCard(
-            task: _project.tasks[index],
+          return ExpandableTaskCard(
+            task: rootTasks[index],
             taskIndex: index,
-            onToggle: () => _toggleTask(index),
-            onEdit: () => _editTask(index),
-            onDelete: () => _deleteTask(index),
-            onUpdateSteps: (newSteps) => _updateTaskSteps(index, newSteps),
-            onTaskUpdated: (updatedTask) => _updateTaskWithSubTasks(index, updatedTask),
+            onTaskUpdated: (updatedTask) => _updateTask(updatedTask),
+            onTaskDeleted: () => _deleteTask(rootTasks[index].id),
+            taskService: _taskService,
+            level: 0,
+            forceExpanded: _allExpanded,
           );
         },
       ),
     );
+  }
+
+  void _updateTask(Task updatedTask) {
+    _taskService.updateTask(updatedTask);
+    setState(() {});
+    widget.onProjectUpdated(_project);
+  }
+
+  void _deleteTask(String taskId) {
+    _taskService.removeTask(taskId);
+    setState(() {});
+    widget.onProjectUpdated(_project);
   }
 
   @override

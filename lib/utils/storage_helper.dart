@@ -1,6 +1,7 @@
-// utils/storage_helper.dart - ОБНОВИМ для лучшей диагностики
+// utils/storage_helper.dart
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'logger.dart';
 
 class StorageHelper {
   static const String _projectsKey = 'saved_projects';
@@ -11,17 +12,16 @@ class StorageHelper {
       final jsonString = jsonEncode(projects);
       final success = await prefs.setString(_projectsKey, jsonString);
 
-      print('💾 Сохраняем данные: ${projects.length} проектов');
-      print('📝 Ключ: $_projectsKey');
-      print('✅ Успех сохранения: $success');
+      Logger.debug('Сохраняем данные: ${projects.length} проектов');
+      Logger.debug('Ключ: $_projectsKey');
+      Logger.debug('Успех сохранения: $success');
 
-      // Проверим что реально сохранилось
       final saved = prefs.getString(_projectsKey);
-      print('🔍 Проверка сохраненных данных: ${saved != null ? "ДАННЫЕ ЕСТЬ" : "ДАННЫХ НЕТ"}');
+      Logger.debug('Проверка сохраненных данных: ${saved != null ? "ДАННЫЕ ЕСТЬ" : "ДАННЫХ НЕТ"}');
 
       return success;
     } catch (e) {
-      print('❌ Ошибка сохранения: $e');
+      Logger.error('Ошибка сохранения проектов', e);
       return false;
     }
   }
@@ -31,18 +31,17 @@ class StorageHelper {
       final prefs = await SharedPreferences.getInstance();
       final jsonString = prefs.getString(_projectsKey);
 
-      print('📥 Загружаем данные по ключу: $_projectsKey');
-      print('📄 Данные: $jsonString');
+      Logger.debug('Загружаем данные по ключу: $_projectsKey');
 
       if (jsonString != null && jsonString.isNotEmpty) {
         final List<dynamic> jsonList = jsonDecode(jsonString);
-        print('📊 Загружено ${jsonList.length} проектов');
+        Logger.info('Загружено ${jsonList.length} проектов');
         return jsonList.cast<Map<String, dynamic>>();
       } else {
-        print('📭 Нет сохраненных данных');
+        Logger.debug('Нет сохраненных данных');
       }
     } catch (e) {
-      print('❌ Ошибка загрузки: $e');
+      Logger.error('Ошибка загрузки проектов', e);
     }
 
     return [];
@@ -52,25 +51,24 @@ class StorageHelper {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_projectsKey);
-      print('🗑️ Данные очищены');
+      Logger.info('Данные очищены');
     } catch (e) {
-      print('❌ Ошибка очистки: $e');
+      Logger.error('Ошибка очистки данных', e);
     }
   }
 
-  // ✅ НОВЫЙ МЕТОД: Показать все ключи в хранилище
   static Future<void> debugStorage() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final keys = prefs.getKeys();
-      print('🔑 Все ключи в хранилище: $keys');
+      Logger.debug('Все ключи в хранилище: $keys');
 
       for (final key in keys) {
         final value = prefs.getString(key);
-        print('   $key: ${value?.substring(0, value.length > 100 ? 100 : value.length)}');
+        Logger.debug('   $key: ${value?.substring(0, value.length > 100 ? 100 : value.length)}');
       }
     } catch (e) {
-      print('❌ Ошибка отладки: $e');
+      Logger.error('Ошибка отладки хранилища', e);
     }
   }
 }

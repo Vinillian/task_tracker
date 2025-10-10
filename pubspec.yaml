@@ -12,14 +12,19 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.2
-  shared_preferences: ^2.2.2  # ДОБАВИЛИ ЭТУ СТРОКУ
+  shared_preferences: ^2.2.2
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
-  mockito: ^5.5.1
+  flutter_lints: ^6.0.0
+  # УБРАТЬ test: ^1.24.0 - он конфликтует с flutter_test
+  # mockito: ^5.5.1 - временно убрать если не используется
   build_runner: ^2.8.0
+  integration_test:
+    sdk: flutter
 
 flutter:
   uses-material-design: true

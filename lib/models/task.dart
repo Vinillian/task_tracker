@@ -1,54 +1,54 @@
-// models/task.dart
+// lib/models/task.dart
 import 'task_type.dart';
 
 class Task {
   final String id;
+  final String? parentId; // ✅ null для корневых задач
+  final String projectId; // ✅ связь с проектом
   final String title;
   final String description;
-  final bool isCompleted;
-  final List<Task> subTasks;
+  bool isCompleted;
   final TaskType type;
   final int totalSteps;
-  final int completedSteps;
+  int completedSteps;
   final int maxDepth;
+  // ✅ БУДУЩИЕ ПОЛЯ для ваших фич:
+  // DateTime? dueDate;
+  // Priority priority;
+  // Color color;
+  // bool isDaily = false;
 
   Task({
     required this.id,
+    this.parentId,
+    required this.projectId,
     required this.title,
     required this.description,
     this.isCompleted = false,
-    this.subTasks = const [],
     this.type = TaskType.single,
     this.totalSteps = 1,
     this.completedSteps = 0,
     this.maxDepth = 5,
   });
 
+  // ✅ СОБСТВЕННЫЙ прогресс задачи (без учета подзадач)
   double get progress {
     if (type == TaskType.stepByStep) {
       return totalSteps > 0 ? completedSteps / totalSteps : 0.0;
     }
-
-    if (subTasks.isEmpty) return isCompleted ? 1.0 : 0.0;
-
-    final totalProgress = subTasks.map((task) => task.progress).reduce((a, b) => a + b);
-    return totalProgress / subTasks.length;
+    return isCompleted ? 1.0 : 0.0;
   }
 
-  bool get canAddSubTask => calculateDepth() < maxDepth;
-
-  int calculateDepth([int currentDepth = 0]) {
-    if (subTasks.isEmpty) return currentDepth;
-    final depths = subTasks.map((task) => task.calculateDepth(currentDepth + 1));
-    return depths.reduce((a, b) => a > b ? a : b);
-  }
+  // ✅ УДАЛЯЕМ все методы работы с subTasks
+  // ❌ УБРАТЬ: get subTasks, getAllTasks(), calculateDepth() и т.д.
 
   Task copyWith({
     String? id,
+    String? parentId,
+    String? projectId,
     String? title,
     String? description,
     bool? isCompleted,
-    List<Task>? subTasks,
     TaskType? type,
     int? totalSteps,
     int? completedSteps,
@@ -56,10 +56,11 @@ class Task {
   }) {
     return Task(
       id: id ?? this.id,
+      parentId: parentId ?? this.parentId,
+      projectId: projectId ?? this.projectId,
       title: title ?? this.title,
       description: description ?? this.description,
       isCompleted: isCompleted ?? this.isCompleted,
-      subTasks: subTasks ?? this.subTasks,
       type: type ?? this.type,
       totalSteps: totalSteps ?? this.totalSteps,
       completedSteps: completedSteps ?? this.completedSteps,
@@ -70,10 +71,11 @@ class Task {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'parentId': parentId,
+      'projectId': projectId,
       'title': title,
       'description': description,
       'isCompleted': isCompleted,
-      'subTasks': subTasks.map((task) => task.toJson()).toList(),
       'type': type.index,
       'totalSteps': totalSteps,
       'completedSteps': completedSteps,
@@ -84,12 +86,11 @@ class Task {
   factory Task.fromJson(Map<String, dynamic> json) {
     return Task(
       id: json['id'] ?? '',
+      parentId: json['parentId'],
+      projectId: json['projectId'] ?? '',
       title: json['title'] ?? '',
       description: json['description'] ?? '',
       isCompleted: json['isCompleted'] ?? false,
-      subTasks: (json['subTasks'] as List<dynamic>?)
-          ?.map((taskJson) => Task.fromJson(taskJson))
-          .toList() ?? [],
       type: TaskType.values[json['type'] as int? ?? 0],
       totalSteps: json['totalSteps'] as int? ?? 1,
       completedSteps: json['completedSteps'] as int? ?? 0,

@@ -16,7 +16,6 @@ class TaskProgressWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (task.type == TaskType.stepByStep) {
-      // ✅ ПОШАГОВАЯ ЗАДАЧА - прогресс бар
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -35,7 +34,6 @@ class TaskProgressWidget extends StatelessWidget {
         ],
       );
     } else {
-      // ✅ ОДИНОЧНАЯ ЗАДАЧА - чекбокс
       return Checkbox(
         value: task.isCompleted,
         onChanged: (value) => onToggle(),

@@ -1,10 +1,9 @@
 // screens/home_screen.dart
 import 'package:flutter/material.dart';
 import '../models/project.dart';
-import '../models/task.dart';
-import '../models/task_type.dart';
+import '../services/task_service.dart';
 import '../utils/storage_helper.dart';
-import '../widgets/project_card.dart';
+import '../utils/logger.dart';
 import '../widgets/add_project_dialog.dart';
 import 'project_detail_screen.dart';
 
@@ -17,6 +16,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   List<Project> projects = [];
+  final TaskService _taskService = TaskService();
   bool _isLoading = true;
 
   @override
@@ -39,12 +39,14 @@ class _HomeScreenState extends State<HomeScreen> {
             return Project.fromJson(projectData);
           }).toList();
         });
-        print('✅ Загружено ${projects.length} проектов');
+        Logger.success('Загружено ${projects.length} проектов');
+
+        _loadDemoTasks();
       } else {
         _createDemoProjects();
       }
     } catch (e) {
-      print('❌ Ошибка загрузки: $e');
+      Logger.error('Ошибка загрузки проектов', e);
       _createDemoProjects();
     } finally {
       setState(() {
@@ -53,42 +55,32 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _loadDemoTasks() {
+    for (final project in projects) {
+      _taskService.loadDemoTasks(project.id);
+    }
+    Logger.success('Загружены демо-задачи для ${projects.length} проектов');
+  }
+
   void _createDemoProjects() {
     setState(() {
       projects = [
         Project(
-          id: '1',
+          id: 'project_1',
           name: 'Рабочие задачи',
           description: 'Задачи по работе',
           createdAt: DateTime.now(),
-          tasks: [
-            Task(
-              id: '1',
-              title: 'Создать отчет',
-              description: 'Подготовить еженедельный отчет',
-              isCompleted: false,
-              type: TaskType.single,
-            ),
-          ],
         ),
         Project(
-          id: '2',
+          id: 'project_2',
           name: 'Личные дела',
           description: 'Персональные задачи',
           createdAt: DateTime.now(),
-          tasks: [
-            Task(
-              id: '2',
-              title: 'Купить продукты',
-              description: 'Молоко, хлеб, фрукты',
-              isCompleted: false,
-              type: TaskType.single,
-            ),
-          ],
         ),
       ];
     });
     _saveProjects();
+    _loadDemoTasks();
   }
 
   Future<void> _saveProjects() async {
@@ -110,10 +102,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void _createProject(String name, String description) {
     setState(() {
       final newProject = Project(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: 'project_${DateTime.now().millisecondsSinceEpoch}',
         name: name,
         description: description,
-        tasks: [],
         createdAt: DateTime.now(),
       );
 
@@ -147,6 +138,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 projects.clear();
               });
               StorageHelper.clearData();
+              _taskService.clearAllTasks();
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -169,13 +161,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _saveProjects();
   }
 
-  void _deleteProject(int index) {
-    setState(() {
-      projects.removeAt(index);
-    });
-    _saveProjects();
-  }
-
   void _navigateToProjectDetail(int index) {
     Navigator.push(
       context,
@@ -184,6 +169,99 @@ class _HomeScreenState extends State<HomeScreen> {
           project: projects[index],
           projectIndex: index,
           onProjectUpdated: (updatedProject) => _updateProject(index, updatedProject),
+          taskService: _taskService,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProjectCard(int index) {
+    final project = projects[index];
+    final progress = _taskService.getProjectProgress(project.id);
+    final totalTasks = _taskService.getProjectTotalTasks(project.id);
+    final completedTasks = _taskService.getProjectCompletedTasks(project.id);
+
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: InkWell(
+        onTap: () => _navigateToProjectDetail(index),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          height: 80,
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.folder, color: Colors.blue.shade600, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      project.name,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (project.description.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        project.description,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${(progress * 100).toInt()}%',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$completedTasks/$totalTasks',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 60,
+                child: LinearProgressIndicator(
+                  value: progress,
+                  backgroundColor: Colors.grey.shade200,
+                  color: progress == 1.0 ? Colors.green : Colors.blue,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -193,7 +271,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Task Tracker 💾'),
+        title: const Text('Task Tracker 💾 (Flat Structure)'),
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
@@ -229,17 +307,10 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       )
           : ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: projects.length,
         itemBuilder: (context, index) {
-          return GestureDetector(
-            onTap: () => _navigateToProjectDetail(index),
-            child: ProjectCard(
-              project: projects[index],
-              projectIndex: index,
-              onUpdate: (updatedProject) => _updateProject(index, updatedProject),
-              onDelete: () => _deleteProject(index),
-            ),
-          );
+          return _buildProjectCard(index);
         },
       ),
       floatingActionButton: FloatingActionButton(

@@ -1,6 +1,6 @@
 {
-    "name": "task_tracker_new",
-    "short_name": "task_tracker_new",
+    "name": "task_tracker_clean",
+    "short_name": "task_tracker_clean",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
