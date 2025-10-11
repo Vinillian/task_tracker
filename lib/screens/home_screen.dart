@@ -1,22 +1,20 @@
-// screens/home_screen.dart
 import 'package:flutter/material.dart';
-import '../models/project.dart';
-import '../services/task_service.dart';
-import '../utils/storage_helper.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/project_provider.dart';
+import '../providers/task_provider.dart';
 import '../utils/logger.dart';
 import '../widgets/add_project_dialog.dart';
 import 'project_detail_screen.dart';
+import '../models/project.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  List<Project> projects = [];
-  final TaskService _taskService = TaskService();
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isLoading = true;
 
   @override
@@ -31,20 +29,8 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      final savedProjects = await StorageHelper.loadProjects();
-
-      if (savedProjects.isNotEmpty) {
-        setState(() {
-          projects = savedProjects.map((projectData) {
-            return Project.fromJson(projectData);
-          }).toList();
-        });
-        Logger.success('Загружено ${projects.length} проектов');
-
-        _loadDemoTasks();
-      } else {
-        _createDemoProjects();
-      }
+      await ref.read(projectsProvider.notifier).loadProjects();
+      Logger.success('Проекты загружены через провайдер');
     } catch (e) {
       Logger.error('Ошибка загрузки проектов', e);
       _createDemoProjects();
@@ -55,37 +41,28 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _loadDemoTasks() {
-    for (final project in projects) {
-      _taskService.loadDemoTasks(project.id);
-    }
-    Logger.success('Загружены демо-задачи для ${projects.length} проектов');
-  }
-
   void _createDemoProjects() {
-    setState(() {
-      projects = [
-        Project(
-          id: 'project_1',
-          name: 'Рабочие задачи',
-          description: 'Задачи по работе',
-          createdAt: DateTime.now(),
-        ),
-        Project(
-          id: 'project_2',
-          name: 'Личные дела',
-          description: 'Персональные задачи',
-          createdAt: DateTime.now(),
-        ),
-      ];
-    });
-    _saveProjects();
-    _loadDemoTasks();
-  }
+    final demoProjects = [
+      Project(
+        id: 'project_1',
+        name: 'Рабочие задачи',
+        description: 'Задачи по работе',
+        createdAt: DateTime.now(),
+      ),
+      Project(
+        id: 'project_2',
+        name: 'Личные дела',
+        description: 'Персональные задачи',
+        createdAt: DateTime.now(),
+      ),
+    ];
 
-  Future<void> _saveProjects() async {
-    final projectsData = projects.map((project) => project.toJson()).toList();
-    await StorageHelper.saveProjects(projectsData);
+    // Добавляем демо-проекты через провайдер
+    for (final project in demoProjects) {
+      ref.read(projectsProvider.notifier).addProject(project);
+      // УБРАЛИ автоматическое создание демо-задач
+      // ref.read(tasksProvider.notifier).loadDemoTasks(project.id);
+    }
   }
 
   void _addNewProject() {
@@ -100,23 +77,45 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _createProject(String name, String description) {
-    setState(() {
-      final newProject = Project(
-        id: 'project_${DateTime.now().millisecondsSinceEpoch}',
-        name: name,
-        description: description,
-        createdAt: DateTime.now(),
-      );
+    final newProject = Project(
+      id: 'project_${DateTime.now().millisecondsSinceEpoch}',
+      name: name,
+      description: description,
+      createdAt: DateTime.now(),
+    );
 
-      projects.add(newProject);
-    });
+    ref.read(projectsProvider.notifier).addProject(newProject);
 
-    _saveProjects();
+    // УБРАЛИ автоматическое создание демо-задач
+    // ref.read(tasksProvider.notifier).loadDemoTasks(newProject.id);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Проект "$name" создан!'),
         backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  void _addDemoTasks() {
+    final projects = ref.read(projectsProvider);
+    if (projects.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Сначала создайте проект!'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Добавляем демо-задачи в первый проект
+    ref.read(tasksProvider.notifier).loadDemoTasks(projects.first.id);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Демо-задачи добавлены в проект "${projects.first.name}"!'),
+        backgroundColor: Colors.blue,
       ),
     );
   }
@@ -134,11 +133,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           TextButton(
             onPressed: () {
-              setState(() {
-                projects.clear();
-              });
-              StorageHelper.clearData();
-              _taskService.clearAllTasks();
+              ref.read(projectsProvider.notifier).clearAllProjects();
+              ref.read(tasksProvider.notifier).clearAllTasks();
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -154,32 +150,33 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _updateProject(int index, Project updatedProject) {
-    setState(() {
-      projects[index] = updatedProject;
-    });
-    _saveProjects();
-  }
-
   void _navigateToProjectDetail(int index) {
+    final projects = ref.read(projectsProvider);
+    final taskService = ref.read(taskServiceProvider);
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ProjectDetailScreen(
           project: projects[index],
           projectIndex: index,
-          onProjectUpdated: (updatedProject) => _updateProject(index, updatedProject),
-          taskService: _taskService,
+          onProjectUpdated: (updatedProject) {
+            ref.read(projectsProvider.notifier).updateProject(index, updatedProject);
+          },
+          taskService: taskService,
         ),
       ),
     );
   }
 
   Widget _buildProjectCard(int index) {
+    final projects = ref.watch(projectsProvider);
+    final taskService = ref.read(taskServiceProvider);
+
     final project = projects[index];
-    final progress = _taskService.getProjectProgress(project.id);
-    final totalTasks = _taskService.getProjectTotalTasks(project.id);
-    final completedTasks = _taskService.getProjectCompletedTasks(project.id);
+    final progress = taskService.getProjectProgress(project.id);
+    final totalTasks = taskService.getProjectTotalTasks(project.id);
+    final completedTasks = taskService.getProjectCompletedTasks(project.id);
 
     return Card(
       elevation: 2,
@@ -269,14 +266,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final projects = ref.watch(projectsProvider);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Task Tracker 💾 (Flat Structure)'),
+        title: const Text('Task Tracker 💾 (Riverpod)'),
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: _addNewProject,
             tooltip: 'Создать проект',
+          ),
+          // ДОБАВЬ эту кнопку
+          IconButton(
+            icon: const Icon(Icons.play_arrow),
+            onPressed: _addDemoTasks,
+            tooltip: 'Добавить демо-задачи',
           ),
           IconButton(
             icon: const Icon(Icons.delete, color: Colors.red),
@@ -319,4 +324,5 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
 }

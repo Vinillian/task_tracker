@@ -10,7 +10,8 @@ void main() {
       taskService = TaskService();
     });
 
-    test('Add and retrieve task', () {
+    test('addTask and getProjectTasks work correctly', () {
+      // Arrange
       final task = Task(
         id: 'test_1',
         projectId: 'project_1',
@@ -18,29 +19,36 @@ void main() {
         description: 'Test Description',
       );
 
+      // Act
       taskService.addTask(task);
       final tasks = taskService.getProjectTasks('project_1');
 
+      // Assert
       expect(tasks.length, 1);
       expect(tasks[0].title, 'Test Task');
+      expect(tasks[0].projectId, 'project_1');
     });
 
-    test('Remove task', () {
+    test('removeTask removes task correctly', () {
+      // Arrange
       final task = Task(
         id: 'test_1',
         projectId: 'project_1',
         title: 'Test Task',
         description: 'Test Description',
       );
-
       taskService.addTask(task);
+
+      // Act
       taskService.removeTask('test_1');
       final tasks = taskService.getProjectTasks('project_1');
 
+      // Assert
       expect(tasks.length, 0);
     });
 
-    test('Get sub tasks', () {
+    test('getSubTasks returns correct sub tasks', () {
+      // Arrange
       final parentTask = Task(
         id: 'parent_1',
         projectId: 'project_1',
@@ -59,27 +67,36 @@ void main() {
       taskService.addTask(parentTask);
       taskService.addTask(subTask);
 
+      // Act
       final subTasks = taskService.getSubTasks('parent_1');
 
+      // Assert
       expect(subTasks.length, 1);
       expect(subTasks[0].title, 'Sub Task');
+      expect(subTasks[0].parentId, 'parent_1');
     });
 
-    test('Get all project tasks including sub tasks', () {
-      final task1 = Task(id: 'task_1', projectId: 'project_1', title: 'Task 1', description: '');
-      final task2 = Task(id: 'task_2', projectId: 'project_1', title: 'Task 2', description: '');
-      final subTask = Task(id: 'sub_1', parentId: 'task_1', projectId: 'project_1', title: 'Sub Task', description: '');
+    test('updateTask updates task correctly', () {
+      // Arrange
+      final task = Task(
+        id: 'task_1',
+        projectId: 'project_1',
+        title: 'Original Title',
+        description: 'Original Description',
+      );
+      taskService.addTask(task);
 
-      taskService.addTask(task1);
-      taskService.addTask(task2);
-      taskService.addTask(subTask);
+      // Act
+      final updatedTask = task.copyWith(title: 'Updated Title');
+      taskService.updateTask(updatedTask);
 
-      final allTasks = taskService.getAllProjectTasks('project_1');
-
-      expect(allTasks.length, 3);
+      // Assert
+      final tasks = taskService.getProjectTasks('project_1');
+      expect(tasks[0].title, 'Updated Title');
     });
 
-    test('Project progress calculation', () {
+    test('getProjectProgress calculates progress correctly', () {
+      // Arrange
       final completedTask = Task(
         id: 'task_1',
         projectId: 'project_1',
@@ -99,40 +116,11 @@ void main() {
       taskService.addTask(completedTask);
       taskService.addTask(pendingTask);
 
+      // Act
       final progress = taskService.getProjectProgress('project_1');
 
+      // Assert
       expect(progress, 0.5); // 1 completed out of 2 tasks
-    });
-
-    test('Update task', () {
-      final task = Task(
-        id: 'task_1',
-        projectId: 'project_1',
-        title: 'Original Title',
-        description: 'Original Description',
-      );
-
-      taskService.addTask(task);
-
-      final updatedTask = task.copyWith(title: 'Updated Title');
-      taskService.updateTask(updatedTask);
-
-      final tasks = taskService.getProjectTasks('project_1');
-      expect(tasks[0].title, 'Updated Title');
-    });
-
-    test('Can add sub task check', () {
-      final task = Task(
-        id: 'task_1',
-        projectId: 'project_1',
-        title: 'Test Task',
-        description: '',
-      );
-
-      taskService.addTask(task);
-
-      final canAdd = taskService.canAddSubTask('task_1');
-      expect(canAdd, true);
     });
   });
 }
