@@ -24,6 +24,33 @@ class MockTaskService extends TaskService {
     return true; // Always allow for tests
   }
 
+  @override
+  void updateTask(Task updatedTask) {
+    final index = _mockTasks.indexWhere((t) => t.id == updatedTask.id);
+    if (index != -1) {
+      _mockTasks[index] = updatedTask;
+    }
+  }
+
+  @override
+  int getProjectTotalTasks(String projectId) {
+    return _mockTasks.where((task) => task.projectId == projectId).length;
+  }
+
+  @override
+  int getProjectCompletedTasks(String projectId) {
+    return _mockTasks.where((task) => task.projectId == projectId && task.isCompleted).length;
+  }
+
+  @override
+  double getProjectProgress(String projectId) {
+    final projectTasks = _mockTasks.where((task) => task.projectId == projectId).toList();
+    if (projectTasks.isEmpty) return 0.0;
+
+    final completedCount = projectTasks.where((task) => task.isCompleted).length;
+    return completedCount / projectTasks.length;
+  }
+
   // Clear mock data
   void clearMockData() {
     _mockTasks.clear();

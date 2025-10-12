@@ -15,11 +15,6 @@ class Project {
     required this.createdAt,
   });
 
-  // ✅ Прогресс и счетчики БУДУТ в TaskService
-  double get progress => 0.0; // Временная заглушка
-  int get totalTasks => 0;    // Временная заглушка
-  int get completedTasks => 0; // Временная заглушка
-
   Project copyWith({
     String? id,
     String? name,

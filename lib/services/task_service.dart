@@ -6,8 +6,26 @@ import '../utils/logger.dart';
 class TaskService {
   final List<Task> _tasks = [];
 
-  void addTask(Task task) => _tasks.add(task);
-  void removeTask(String taskId) => _tasks.removeWhere((t) => t.id == taskId);
+  // ✅ Кэш для улучшения производительности
+  final Map<String, List<Task>> _projectTasksCache = {};
+  final Map<String, double> _progressCache = {};
+  bool _isCacheDirty = true;
+
+  void _invalidateCache() {
+    _isCacheDirty = true;
+    _projectTasksCache.clear();
+    _progressCache.clear();
+  }
+
+  void addTask(Task task) {
+    _invalidateCache(); // ✅ ДОБАВИТЬ ИНВАЛИДАЦИЮ КЭША
+    _tasks.add(task);
+  }
+
+  void removeTask(String taskId) {
+    _invalidateCache(); // ✅ ДОБАВИТЬ ИНВАЛИДАЦИЮ КЭША
+    _tasks.removeWhere((t) => t.id == taskId);
+  }
 
   List<Task> getProjectTasks(String projectId) {
     return _tasks.where((task) => task.projectId == projectId).toList();
@@ -42,23 +60,29 @@ class TaskService {
   }
 
   double getProjectProgress(String projectId) {
+    // ✅ Используем кэш если данные актуальны
+    if (!_isCacheDirty && _progressCache.containsKey(projectId)) {
+      return _progressCache[projectId]!;
+    }
+
     final allTasks = getAllProjectTasks(projectId);
-    if (allTasks.isEmpty) return 0.0;
+    if (allTasks.isEmpty) {
+      _progressCache[projectId] = 0.0;
+      return 0.0;
+    }
 
     final completedCount = allTasks.where((t) => t.isCompleted).length;
-    return completedCount / allTasks.length;
+    final progress = completedCount / allTasks.length;
+
+    _progressCache[projectId] = progress;
+    _isCacheDirty = false;
+    return progress;
   }
 
   int getProjectTotalTasks(String projectId) => getAllProjectTasks(projectId).length;
+
   int getProjectCompletedTasks(String projectId) =>
       getAllProjectTasks(projectId).where((t) => t.isCompleted).length;
-
-  void updateTask(Task updatedTask) {
-    final index = _tasks.indexWhere((t) => t.id == updatedTask.id);
-    if (index != -1) {
-      _tasks[index] = updatedTask;
-    }
-  }
 
   bool canAddSubTask(String parentId, {int maxDepth = 5}) {
     return _calculateTaskDepth(parentId) < maxDepth;
@@ -88,7 +112,16 @@ class TaskService {
     }
   }
 
+  void updateTask(Task updatedTask) {
+    _invalidateCache(); // ✅ ИНВАЛИДАЦИЯ КЭША
+    final index = _tasks.indexWhere((t) => t.id == updatedTask.id);
+    if (index != -1) {
+      _tasks[index] = updatedTask;
+    }
+  }
+
   void clearAllTasks() {
+    _invalidateCache(); // ✅ ДОБАВИТЬ ИНВАЛИДАЦИЮ КЭША
     _tasks.clear();
   }
 
@@ -97,6 +130,7 @@ class TaskService {
   }
 
   void loadDemoTasks(String projectId) {
+    _invalidateCache(); // ✅ ДОБАВИТЬ ИНВАЛИДАЦИЮ КЭША
     _tasks.removeWhere((task) => task.projectId == projectId);
 
     final mainTask1 = Task(
@@ -172,6 +206,7 @@ class TaskService {
   }
 
   void removeProjectTasks(String projectId) {
+    _invalidateCache(); // ✅ ДОБАВИТЬ ИНВАЛИДАЦИЮ КЭША
     _tasks.removeWhere((task) => task.projectId == projectId);
   }
 }

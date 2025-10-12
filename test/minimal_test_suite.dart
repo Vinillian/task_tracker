@@ -4,7 +4,7 @@ import 'package:task_tracker/models/project.dart';
 import 'package:task_tracker/models/task_type.dart';
 
 void main() {
-  group('Minimal Test Suite - Flat Structure', () {
+  group('Basic Smoke & Minimal Tests', () {
     test('Task model basic functionality', () {
       final task = Task(
         id: '1',
@@ -15,8 +15,8 @@ void main() {
 
       expect(task.title, 'Test Task');
       expect(task.isCompleted, false);
-      expect(task.progress, 0.0);
       expect(task.projectId, 'project_1');
+      expect(task.progress, 0.0);
 
       final completedTask = task.copyWith(isCompleted: true);
       expect(completedTask.isCompleted, true);
@@ -32,8 +32,7 @@ void main() {
       );
 
       expect(project.name, 'Test Project');
-      expect(project.progress, 0.0);
-      expect(project.totalTasks, 0);
+      expect(project.description, 'Test Description');
     });
 
     test('Step-by-step task progress', () {
@@ -48,6 +47,45 @@ void main() {
       );
 
       expect(stepTask.progress, 0.6); // 3/5 = 60%
+    });
+
+    test('Task creation with parentId', () {
+      final task = Task(
+        id: '1',
+        parentId: 'parent_1',
+        projectId: 'project_1',
+        title: 'Test Task',
+        description: 'Test Description',
+      );
+
+      expect(task.id, '1');
+      expect(task.parentId, 'parent_1');
+      expect(task.projectId, 'project_1');
+      expect(task.title, 'Test Task');
+    });
+
+    test('Task JSON serialization', () {
+      final task = Task(
+        id: '1',
+        parentId: 'parent_1',
+        projectId: 'project_1',
+        title: 'Test Task',
+        description: 'Test Description',
+        type: TaskType.stepByStep,
+        totalSteps: 5,
+        completedSteps: 2,
+      );
+
+      final json = task.toJson();
+      final deserialized = Task.fromJson(json);
+
+      expect(deserialized.id, '1');
+      expect(deserialized.parentId, 'parent_1');
+      expect(deserialized.projectId, 'project_1');
+      expect(deserialized.title, 'Test Task');
+      expect(deserialized.type, TaskType.stepByStep);
+      expect(deserialized.totalSteps, 5);
+      expect(deserialized.completedSteps, 2);
     });
   });
 }
