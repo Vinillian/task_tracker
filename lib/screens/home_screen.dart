@@ -30,7 +30,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     try {
       await ref.read(projectsProvider.notifier).loadProjects();
-      Logger.success('Проекты загружены через провайдер');
+
+      // ✅ ДОБАВИТЬ: Загружаем задачи из Hive
+      await ref.read(tasksProvider.notifier).loadTasks();
+
+      Logger.success('Проекты и задачи загружены через провайдер');
     } catch (e) {
       Logger.error('Ошибка загрузки проектов', e);
       _createDemoProjects();
@@ -57,11 +61,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     ];
 
-    // Добавляем демо-проекты через провайдер
     for (final project in demoProjects) {
       ref.read(projectsProvider.notifier).addProject(project);
-      // УБРАЛИ автоматическое создание демо-задач
-      // ref.read(tasksProvider.notifier).loadDemoTasks(project.id);
     }
   }
 
@@ -86,9 +87,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     ref.read(projectsProvider.notifier).addProject(newProject);
 
-    // УБРАЛИ автоматическое создание демо-задач
-    // ref.read(tasksProvider.notifier).loadDemoTasks(newProject.id);
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Проект "$name" создан!'),
@@ -109,7 +107,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return;
     }
 
-    // Добавляем демо-задачи в первый проект
     ref.read(tasksProvider.notifier).loadDemoTasks(projects.first.id);
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -277,7 +274,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onPressed: _addNewProject,
             tooltip: 'Создать проект',
           ),
-          // ДОБАВЬ эту кнопку
           IconButton(
             icon: const Icon(Icons.play_arrow),
             onPressed: _addDemoTasks,
@@ -324,5 +320,4 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     );
   }
-
 }

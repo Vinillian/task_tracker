@@ -2,14 +2,18 @@
 import '../models/task.dart';
 import '../models/task_type.dart';
 import '../utils/logger.dart';
+import 'hive_storage_service.dart';
 
 class TaskService {
   final List<Task> _tasks = [];
+  final HiveStorageService? _storageService;
 
   // ✅ Кэш для улучшения производительности
   final Map<String, List<Task>> _projectTasksCache = {};
   final Map<String, double> _progressCache = {};
   bool _isCacheDirty = true;
+
+  TaskService([this._storageService]); // ✅ ДОБАВИТЬ конструктор
 
   void _invalidateCache() {
     _isCacheDirty = true;
@@ -17,14 +21,17 @@ class TaskService {
     _progressCache.clear();
   }
 
+  // ✅ ОБНОВЛЕННЫЕ методы с сохранением в хранилище
   void addTask(Task task) {
-    _invalidateCache(); // ✅ ДОБАВИТЬ ИНВАЛИДАЦИЮ КЭША
+    _invalidateCache();
     _tasks.add(task);
+    _saveTasksToStorage(); // ✅ ДОБАВИТЬ сохранение
   }
 
   void removeTask(String taskId) {
-    _invalidateCache(); // ✅ ДОБАВИТЬ ИНВАЛИДАЦИЮ КЭША
+    _invalidateCache();
     _tasks.removeWhere((t) => t.id == taskId);
+    _saveTasksToStorage(); // ✅ ДОБАВИТЬ сохранение
   }
 
   List<Task> getProjectTasks(String projectId) {
@@ -84,6 +91,15 @@ class TaskService {
   int getProjectCompletedTasks(String projectId) =>
       getAllProjectTasks(projectId).where((t) => t.isCompleted).length;
 
+  void updateTask(Task updatedTask) {
+    _invalidateCache();
+    final index = _tasks.indexWhere((t) => t.id == updatedTask.id);
+    if (index != -1) {
+      _tasks[index] = updatedTask;
+    }
+    _saveTasksToStorage(); // ✅ ДОБАВИТЬ сохранение
+  }
+
   bool canAddSubTask(String parentId, {int maxDepth = 5}) {
     return _calculateTaskDepth(parentId) < maxDepth;
   }
@@ -112,17 +128,10 @@ class TaskService {
     }
   }
 
-  void updateTask(Task updatedTask) {
-    _invalidateCache(); // ✅ ИНВАЛИДАЦИЯ КЭША
-    final index = _tasks.indexWhere((t) => t.id == updatedTask.id);
-    if (index != -1) {
-      _tasks[index] = updatedTask;
-    }
-  }
-
   void clearAllTasks() {
-    _invalidateCache(); // ✅ ДОБАВИТЬ ИНВАЛИДАЦИЮ КЭША
+    _invalidateCache();
     _tasks.clear();
+    _saveTasksToStorage(); // ✅ ДОБАВИТЬ сохранение
   }
 
   List<Task> getAllTasks() {
@@ -130,7 +139,7 @@ class TaskService {
   }
 
   void loadDemoTasks(String projectId) {
-    _invalidateCache(); // ✅ ДОБАВИТЬ ИНВАЛИДАЦИЮ КЭША
+    _invalidateCache();
     _tasks.removeWhere((task) => task.projectId == projectId);
 
     final mainTask1 = Task(
@@ -190,6 +199,7 @@ class TaskService {
     );
     addTask(subTask3);
 
+    _saveTasksToStorage(); // ✅ ДОБАВИТЬ сохранение
     Logger.success('Загружено демо-задач для проекта $projectId: ${getProjectTotalTasks(projectId)}');
   }
 
@@ -206,7 +216,34 @@ class TaskService {
   }
 
   void removeProjectTasks(String projectId) {
-    _invalidateCache(); // ✅ ДОБАВИТЬ ИНВАЛИДАЦИЮ КЭША
+    _invalidateCache();
     _tasks.removeWhere((task) => task.projectId == projectId);
+    _saveTasksToStorage(); // ✅ ДОБАВИТЬ сохранение
+  }
+
+  // ✅ Методы для работы с Hive хранилищем
+  Future<void> loadTasksFromStorage() async {
+    if (_storageService != null) {
+      try {
+        final savedTasks = await _storageService!.loadTasks();
+        _tasks.clear();
+        _tasks.addAll(savedTasks);
+        _invalidateCache();
+      } catch (e) {
+        Logger.error('Ошибка загрузки задач из Hive', e);
+        // Продолжаем работу с пустым списком задач
+      }
+    }
+  }
+
+  Future<void> _saveTasksToStorage() async {
+    if (_storageService != null) {
+      try {
+        await _storageService!.saveTasks(_tasks);
+      } catch (e) {
+        Logger.error('Ошибка сохранения задач в Hive', e);
+        // Продолжаем работу без сохранения
+      }
+    }
   }
 }

@@ -1,24 +1,31 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/project.dart';
-import '../utils/storage_helper.dart';
+import '../services/hive_storage_service.dart';
 import '../utils/logger.dart';
 
+final storageServiceProvider = Provider<HiveStorageService>((ref) {
+  throw UnimplementedError('StorageService should be overridden in main.dart');
+});
+
 final projectsProvider = StateNotifierProvider<ProjectNotifier, List<Project>>((ref) {
-  return ProjectNotifier();
+  final storageService = ref.watch(storageServiceProvider);
+  return ProjectNotifier(storageService);
 });
 
 class ProjectNotifier extends StateNotifier<List<Project>> {
-  ProjectNotifier() : super([]);
+  final HiveStorageService _storageService;
+
+  ProjectNotifier(this._storageService) : super([]);
 
   Future<void> loadProjects() async {
     try {
-      final savedProjects = await StorageHelper.loadProjects();
+      final savedProjects = await _storageService.loadProjects();
       if (savedProjects.isNotEmpty) {
-        final projects = savedProjects.map((projectData) => Project.fromJson(projectData)).toList();
-        state = projects;
+        state = savedProjects;
+        Logger.success('Проекты загружены из Hive');
       }
     } catch (e) {
-      Logger.error('Ошибка загрузки проектов', e);
+      Logger.error('Ошибка загрузки проектов из Hive', e);
     }
   }
 
@@ -36,11 +43,14 @@ class ProjectNotifier extends StateNotifier<List<Project>> {
 
   void clearAllProjects() {
     state = [];
-    StorageHelper.clearData();
+    _storageService.clear();
   }
 
   Future<void> _saveProjects() async {
-    final projectsData = state.map((project) => project.toJson()).toList();
-    await StorageHelper.saveProjects(projectsData);
+    try {
+      await _storageService.saveProjects(state);
+    } catch (e) {
+      Logger.error('Ошибка сохранения проектов в Hive', e);
+    }
   }
 }

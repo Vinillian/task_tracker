@@ -1,22 +1,40 @@
 // lib/models/task.dart
+import 'package:hive/hive.dart';
 import 'task_type.dart';
 
+part 'task.g.dart';
+
+@HiveType(typeId: 1)
 class Task {
+  @HiveField(0)
   final String id;
-  final String? parentId; // ✅ null для корневых задач
-  final String projectId; // ✅ связь с проектом
+
+  @HiveField(1)
+  final String? parentId;
+
+  @HiveField(2)
+  final String projectId;
+
+  @HiveField(3)
   final String title;
+
+  @HiveField(4)
   final String description;
+
+  @HiveField(5)
   bool isCompleted;
+
+  @HiveField(6)
   final TaskType type;
+
+  @HiveField(7)
   final int totalSteps;
+
+  @HiveField(8)
   int completedSteps;
+
+  @HiveField(9)
   final int maxDepth;
-  // ✅ БУДУЩИЕ ПОЛЯ для ваших фич:
-  // DateTime? dueDate;
-  // Priority priority;
-  // Color color;
-  // bool isDaily = false;
 
   Task({
     required this.id,
@@ -31,16 +49,12 @@ class Task {
     this.maxDepth = 5,
   });
 
-  // ✅ СОБСТВЕННЫЙ прогресс задачи (без учета подзадач)
   double get progress {
     if (type == TaskType.stepByStep) {
       return totalSteps > 0 ? completedSteps / totalSteps : 0.0;
     }
     return isCompleted ? 1.0 : 0.0;
   }
-
-  // ✅ УДАЛЯЕМ все методы работы с subTasks
-  // ❌ УБРАТЬ: get subTasks, getAllTasks(), calculateDepth() и т.д.
 
   Task copyWith({
     String? id,
