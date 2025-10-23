@@ -1,0 +1,28 @@
+# Файл: gitflic-ci.yaml
+stages:
+  - test
+  - build
+  - release
+
+test job:
+  stage: test
+  script:
+    - echo "Запускаю тесты для ветки $CI_COMMIT_REF_NAME"
+
+build job:
+  stage: build
+  script:
+    - echo "Собираю проект..."
+    - mkdir artifact/
+    - echo "Это артефакт сборки" > artifact/result.txt
+  artifacts:
+    name: build_artifact
+    paths:
+      - artifact/
+
+release job:
+  stage: release
+  when: manual # Запуск вручную
+  script:
+    - echo "Создаю релиз"
+  needs: ["test job", "build job"]
