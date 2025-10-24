@@ -49,7 +49,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     showDialog(
       context: context,
       builder: (context) => AddTaskDialog(
-        onTaskCreated: (String title, String description, TaskType type, int steps, String? parentId) {
+        onTaskCreated: (String title, String description, TaskType type,
+            int steps, String? parentId) {
           _createTask(title, description, type, steps, _project.id, parentId);
         },
         projectId: _project.id,
@@ -58,7 +59,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  void _createTask(String title, String description, TaskType type, int totalSteps, String projectId, String? parentId) {
+  void _createTask(String title, String description, TaskType type,
+      int totalSteps, String projectId, String? parentId) {
     final newTask = Task(
       id: 'task_${DateTime.now().millisecondsSinceEpoch}',
       parentId: parentId, // ✅ Используем parentId
@@ -79,13 +81,15 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     // ✅ АВТОПРОКРУТКА К НОВОЙ ЗАДАЧЕ
     if (mounted) {
       Future.delayed(const Duration(milliseconds: 100), () {
-        final scrollController = PrimaryScrollController.of(context);
-        if (scrollController.hasClients) {
-          scrollController.animateTo(
-            scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
+        if (mounted) {
+          final scrollController = PrimaryScrollController.of(context);
+          if (scrollController.hasClients) {
+            scrollController.animateTo(
+              scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
         }
       });
     }
@@ -97,8 +101,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       ),
     );
   }
-
-
 
   void _editProject() {
     showDialog(
@@ -140,7 +142,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     color: Colors.blue.shade50,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(Icons.folder, color: Colors.blue.shade600, size: 24),
+                  child:
+                      Icon(Icons.folder, color: Colors.blue.shade600, size: 24),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -224,7 +227,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Widget _buildTasksList() {
-    final rootTasks = _taskService.getProjectTasks(_project.id)
+    final rootTasks = _taskService
+        .getProjectTasks(_project.id)
         .where((task) => task.parentId == null)
         .toList();
 
