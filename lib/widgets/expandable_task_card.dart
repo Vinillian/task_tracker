@@ -185,11 +185,11 @@ class _ExpandableTaskCardState extends ConsumerState<ExpandableTaskCard> {
                   _updateTaskSteps(tempCompletedSteps);
                   Navigator.pop(context);
                 },
-                child: const Text('Сохранить'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue,
                   foregroundColor: Colors.white,
                 ),
+                child: const Text('Сохранить'),
               ),
             ],
           );
