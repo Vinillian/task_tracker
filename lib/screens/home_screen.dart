@@ -30,7 +30,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     try {
       await ref.read(projectsProvider.notifier).loadProjects();
-      Logger.success('Проекты загружены через провайдер');
+
+      // ✅ ДОБАВИТЬ: Загружаем задачи из Hive
+      await ref.read(tasksProvider.notifier).loadTasks();
+
+      Logger.success('Проекты и задачи загружены через провайдер');
     } catch (e) {
       Logger.error('Ошибка загрузки проектов', e);
       _createDemoProjects();
@@ -57,11 +61,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     ];
 
-    // Добавляем демо-проекты через провайдер
     for (final project in demoProjects) {
       ref.read(projectsProvider.notifier).addProject(project);
-      // УБРАЛИ автоматическое создание демо-задач
-      // ref.read(tasksProvider.notifier).loadDemoTasks(project.id);
     }
   }
 
@@ -86,9 +87,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     ref.read(projectsProvider.notifier).addProject(newProject);
 
-    // УБРАЛИ автоматическое создание демо-задач
-    // ref.read(tasksProvider.notifier).loadDemoTasks(newProject.id);
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Проект "$name" создан!'),
@@ -109,12 +107,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return;
     }
 
-    // Добавляем демо-задачи в первый проект
     ref.read(tasksProvider.notifier).loadDemoTasks(projects.first.id);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Демо-задачи добавлены в проект "${projects.first.name}"!'),
+        content:
+            Text('Демо-задачи добавлены в проект "${projects.first.name}"!'),
         backgroundColor: Colors.blue,
       ),
     );
@@ -125,7 +123,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Очистить все данные?'),
-        content: const Text('Это действие удалит все проекты и задачи. Вы уверены?'),
+        content:
+            const Text('Это действие удалит все проекты и задачи. Вы уверены?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -161,7 +160,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           project: projects[index],
           projectIndex: index,
           onProjectUpdated: (updatedProject) {
-            ref.read(projectsProvider.notifier).updateProject(index, updatedProject);
+            ref
+                .read(projectsProvider.notifier)
+                .updateProject(index, updatedProject);
           },
           taskService: taskService,
         ),
@@ -169,6 +170,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  // ЗАМЕНИТЬ весь метод _buildProjectCard() на этот код:
   Widget _buildProjectCard(int index) {
     final projects = ref.watch(projectsProvider);
     final taskService = ref.read(taskServiceProvider);
@@ -179,68 +181,76 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final completedTasks = taskService.getProjectCompletedTasks(project.id);
 
     return Card(
-      elevation: 2,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      margin: const EdgeInsets.all(16),
       child: InkWell(
         onTap: () => _navigateToProjectDetail(index),
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding: const EdgeInsets.all(12),
-          height: 80,
-          child: Row(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(Icons.folder, color: Colors.blue.shade600, size: 24),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
+              // Верхняя строка с иконкой и названием
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.folder,
+                        color: Colors.blue.shade600, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
                       project.name,
                       style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
-                    if (project.description.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        project.description,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                ),
+                  ),
+                ],
               ),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
+
+              // Описание проекта
+              if (project.description.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  project.description,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+
+              // Прогресс бар (ПОД названием и описанием)
+              const SizedBox(height: 12),
+              LinearProgressIndicator(
+                value: progress,
+                backgroundColor: Colors.grey.shade200,
+                color: progress == 1.0 ? Colors.green : Colors.blue,
+              ),
+              const SizedBox(height: 8),
+
+              // Процент выполнения и статистика
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '${(progress * 100).toInt()}%',
+                    '${(progress * 100).toInt()}% выполнено',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 2),
                   Text(
-                    '$completedTasks/$totalTasks',
+                    '$completedTasks/$totalTasks задач',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey.shade600,
@@ -248,13 +258,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ],
               ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 60,
-                child: LinearProgressIndicator(
-                  value: progress,
-                  backgroundColor: Colors.grey.shade200,
-                  color: progress == 1.0 ? Colors.green : Colors.blue,
+
+              // Дата создания
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'Создан: ${project.createdAt.day}.${project.createdAt.month}.${project.createdAt.year}',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.grey.shade500,
+                  ),
                 ),
               ),
             ],
@@ -277,7 +291,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onPressed: _addNewProject,
             tooltip: 'Создать проект',
           ),
-          // ДОБАВЬ эту кнопку
           IconButton(
             icon: const Icon(Icons.play_arrow),
             onPressed: _addDemoTasks,
@@ -288,41 +301,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onPressed: _clearAllData,
             tooltip: 'Очистить все данные',
           ),
+          // В методе build класса _HomeScreenState, в AppBar actions ДОБАВИТЬ:
+          IconButton(
+            icon: const Icon(Icons.science),
+            onPressed: () => Navigator.pushNamed(context, '/test-lab'),
+            tooltip: 'Test Lab',
+          ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : projects.isEmpty
-          ? const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.folder_open, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text(
-              'Нет проектов',
-              style: TextStyle(fontSize: 18, color: Colors.grey),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Нажмите + чтобы создать первый проект',
-              style: TextStyle(color: Colors.grey),
-            ),
-          ],
-        ),
-      )
-          : ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: projects.length,
-        itemBuilder: (context, index) {
-          return _buildProjectCard(index);
-        },
-      ),
+              ? const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.folder_open, size: 64, color: Colors.grey),
+                      SizedBox(height: 16),
+                      Text(
+                        'Нет проектов',
+                        style: TextStyle(fontSize: 18, color: Colors.grey),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Нажмите + чтобы создать первый проект',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  itemCount: projects.length,
+                  itemBuilder: (context, index) {
+                    return _buildProjectCard(index);
+                  },
+                ),
       floatingActionButton: FloatingActionButton(
         onPressed: _addNewProject,
         child: const Icon(Icons.add),
       ),
     );
   }
-
 }

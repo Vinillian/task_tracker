@@ -1,12 +1,21 @@
 // lib/models/project.dart
-// УДАЛИТЬ импорт task.dart если есть
+import 'package:hive/hive.dart';
 
+part 'project.g.dart';
+
+@HiveType(typeId: 0)
 class Project {
+  @HiveField(0)
   final String id;
+
+  @HiveField(1)
   final String name;
+
+  @HiveField(2)
   final String description;
+
+  @HiveField(3)
   final DateTime createdAt;
-  // ✅ УДАЛЯЕМ List<Task> tasks - задачи теперь хранятся отдельно
 
   Project({
     required this.id,
@@ -14,11 +23,6 @@ class Project {
     required this.description,
     required this.createdAt,
   });
-
-  // ✅ Прогресс и счетчики БУДУТ в TaskService
-  double get progress => 0.0; // Временная заглушка
-  int get totalTasks => 0;    // Временная заглушка
-  int get completedTasks => 0; // Временная заглушка
 
   Project copyWith({
     String? id,
@@ -40,7 +44,6 @@ class Project {
       'name': name,
       'description': description,
       'createdAt': createdAt.millisecondsSinceEpoch,
-      // ✅ УДАЛЯЕМ tasks из JSON
     };
   }
 
