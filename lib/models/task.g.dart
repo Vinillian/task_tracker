@@ -27,13 +27,21 @@ class TaskAdapter extends TypeAdapter<Task> {
       totalSteps: fields[7] as int,
       completedSteps: fields[8] as int,
       maxDepth: fields[9] as int,
+      color: fields[10] as int?,
+      priority: fields[11] as int?,
+      estimatedMinutes: fields[12] as int?,
+      dueDate: fields[13] as DateTime?,
+      isRecurring: fields[14] as bool,
+      lastCompletedDate: fields[15] as DateTime?,
+      createdAt: fields[16] as DateTime?,
+      updatedAt: fields[17] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Task obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(18)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -53,7 +61,23 @@ class TaskAdapter extends TypeAdapter<Task> {
       ..writeByte(8)
       ..write(obj.completedSteps)
       ..writeByte(9)
-      ..write(obj.maxDepth);
+      ..write(obj.maxDepth)
+      ..writeByte(10)
+      ..write(obj.color)
+      ..writeByte(11)
+      ..write(obj.priority)
+      ..writeByte(12)
+      ..write(obj.estimatedMinutes)
+      ..writeByte(13)
+      ..write(obj.dueDate)
+      ..writeByte(14)
+      ..write(obj.isRecurring)
+      ..writeByte(15)
+      ..write(obj.lastCompletedDate)
+      ..writeByte(16)
+      ..write(obj.createdAt)
+      ..writeByte(17)
+      ..write(obj.updatedAt);
   }
 
   @override

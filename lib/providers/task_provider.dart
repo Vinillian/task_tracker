@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/task.dart';
 import '../services/task_service.dart';
-import 'project_provider.dart'; // ✅ ДОБАВИТЬ этот импорт для storageServiceProvider
+import 'project_provider.dart';
 
 final taskServiceProvider = Provider<TaskService>((ref) {
   final storageService = ref.watch(storageServiceProvider);
@@ -47,4 +47,39 @@ class TaskNotifier extends StateNotifier<List<Task>> {
     _taskService.clearAllTasks();
     state = [];
   }
+
+  // ✅ НОВЫЕ МЕТОДЫ ДЛЯ УПРАВЛЕНИЯ СОСТОЯНИЕМ
+  void toggleTaskCompletion(String taskId) {
+    final task = _taskService.getTaskById(taskId);
+    if (task != null) {
+      final updatedTask = task.copyWith(
+        isCompleted: !task.isCompleted,
+        lastCompletedDate: !task.isCompleted ? DateTime.now() : null,
+        updatedAt: DateTime.now(),
+      );
+      updateTask(updatedTask);
+    }
+  }
+
+  void updateTaskSteps(String taskId, int completedSteps) {
+    final task = _taskService.getTaskById(taskId);
+    if (task != null) {
+      final updatedTask = task.copyWith(
+        completedSteps: completedSteps,
+        isCompleted: completedSteps >= task.totalSteps,
+        updatedAt: DateTime.now(),
+      );
+      updateTask(updatedTask);
+    }
+  }
 }
+
+// ✅ Провайдер для получения задачи по ID
+final taskByIdProvider = Provider.family<Task?, String>((ref, taskId) {
+  final tasks = ref.watch(tasksProvider);
+  try {
+    return tasks.firstWhere((task) => task.id == taskId);
+  } catch (e) {
+    return null;
+  }
+});
