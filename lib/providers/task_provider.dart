@@ -76,7 +76,8 @@ class TaskNotifier extends StateNotifier<List<Task>> {
 
 // ✅ Провайдер для получения задачи по ID
 final taskByIdProvider = Provider.family<Task?, String>((ref, taskId) {
-  final tasks = ref.watch(tasksProvider);
+  final tasks = ref
+      .watch(tasksProvider); // ✅ ДОБАВЛЕНО: следим за изменениями списка задач
   try {
     return tasks.firstWhere((task) => task.id == taskId);
   } catch (e) {

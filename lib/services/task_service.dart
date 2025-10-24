@@ -131,6 +131,7 @@ class TaskService {
 
     for (final subTask in directSubTasks) {
       allSubTasks.add(subTask);
+      // ✅ ИСПРАВЛЕНО: передаем ID подзадачи, а не родительской задачи
       allSubTasks.addAll(getAllSubTasks(subTask.id));
     }
 

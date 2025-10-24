@@ -18,6 +18,7 @@ class TaskProgressWidget extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final task = ref.watch(taskByIdProvider(taskId));
+
     if (task == null) return const SizedBox();
 
     return GestureDetector(

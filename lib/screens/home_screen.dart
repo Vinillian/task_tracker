@@ -6,6 +6,8 @@ import '../utils/logger.dart';
 import '../widgets/add_project_dialog.dart';
 import 'project_detail_screen.dart';
 import '../models/project.dart';
+import '../models/task.dart';
+import '../models/task_type.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -116,6 +118,95 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         backgroundColor: Colors.blue,
       ),
     );
+  }
+
+  void _createTestProjectWithTasks() {
+    // Создаем тестовый проект
+    final testProject = Project(
+      id: 'test_project_${DateTime.now().millisecondsSinceEpoch}',
+      name: '🧪 Тестовый проект',
+      description: 'Проект с разнообразными демо-задачами',
+      createdAt: DateTime.now(),
+    );
+
+    ref.read(projectsProvider.notifier).addProject(testProject);
+
+    // Создаем разнообразные задачи
+    _createDiverseTestTasks(testProject.id);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Тестовый проект "${testProject.name}" создан!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  void _createDiverseTestTasks(String projectId) {
+    final taskNotifier = ref.read(tasksProvider.notifier);
+    final now = DateTime.now();
+
+    // 1. Одиночная задача с высоким приоритетом
+    final singleTask = Task.create(
+      title: 'Срочная задача',
+      projectId: projectId,
+      description: 'Задача с высоким приоритетом',
+      priority: 2, // высокий
+      dueDate: now.add(const Duration(days: 1)),
+      color: Colors.red.value,
+    );
+    taskNotifier.addTask(singleTask);
+
+    // 2. Пошаговая задача
+    final stepTask = Task.create(
+      title: 'Изучить Flutter',
+      projectId: projectId,
+      description: 'Пошаговое изучение Flutter',
+      type: TaskType.stepByStep,
+      totalSteps: 5,
+      priority: 1, // средний
+      color: Colors.blue.value,
+    );
+    taskNotifier.addTask(stepTask);
+
+    // 3. Задача с подзадачами (родительская)
+    final parentTask = Task.create(
+      title: 'Подготовить отчет',
+      projectId: projectId,
+      description: 'Основная задача с подзадачами',
+      priority: 1,
+      color: Colors.green.value,
+    );
+    taskNotifier.addTask(parentTask);
+
+    // 4. Подзадачи для родительской
+    final subTask1 = Task.create(
+      title: 'Собрать данные',
+      projectId: projectId,
+      parentId: parentTask.id,
+      description: 'Первая подзадача',
+    );
+    taskNotifier.addTask(subTask1);
+
+    final subTask2 = Task.create(
+      title: 'Написать выводы',
+      projectId: projectId,
+      parentId: parentTask.id,
+      description: 'Вторая подзадача',
+    ).copyWith(isCompleted: true); // ✅ Исправлено
+    taskNotifier.addTask(subTask2);
+
+    // 5. Повторяющаяся задача
+    final recurringTask = Task.create(
+      title: 'Ежедневная встреча',
+      projectId: projectId,
+      description: 'Ежедневная standup встреча',
+      isRecurring: true,
+      dueDate:
+          DateTime(now.year, now.month, now.day + 1, 10, 0), // завтра в 10:00
+      color: Colors.orange.value,
+    );
+    taskNotifier.addTask(recurringTask);
   }
 
   void _clearAllData() {
@@ -306,6 +397,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             icon: const Icon(Icons.science),
             onPressed: () => Navigator.pushNamed(context, '/test-lab'),
             tooltip: 'Test Lab',
+          ),
+          IconButton(
+            icon: const Icon(Icons.folder_special),
+            onPressed: _createTestProjectWithTasks,
+            tooltip: 'Создать тестовый проект с задачами',
           ),
         ],
       ),

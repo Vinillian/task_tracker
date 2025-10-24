@@ -8,26 +8,29 @@ import '../widgets/add_task_dialog.dart';
 import '../widgets/edit_dialogs.dart';
 import '../widgets/expandable_task_card.dart';
 import '../services/task_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/task_provider.dart';
 
-class ProjectDetailScreen extends StatefulWidget {
+class ProjectDetailScreen extends ConsumerStatefulWidget {
   final Project project;
   final int projectIndex;
   final Function(Project) onProjectUpdated;
-  final TaskService taskService; // ✅ ДОБАВЛЯЕМ
+  final TaskService taskService;
 
   const ProjectDetailScreen({
     super.key,
     required this.project,
     required this.projectIndex,
     required this.onProjectUpdated,
-    required this.taskService, // ✅ ДОБАВЛЯЕМ
+    required this.taskService,
   });
 
   @override
-  State<ProjectDetailScreen> createState() => _ProjectDetailScreenState();
+  ConsumerState<ProjectDetailScreen> createState() =>
+      _ProjectDetailScreenState();
 }
 
-class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
+class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
   late Project _project;
   bool _allExpanded = false;
   late TaskService _taskService; // ✅ ДОБАВЛЯЕМ
@@ -63,7 +66,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       int totalSteps, String projectId, String? parentId) {
     final newTask = Task(
       id: 'task_${DateTime.now().millisecondsSinceEpoch}',
-      parentId: parentId, // ✅ Используем parentId
+      parentId: parentId,
       projectId: projectId,
       title: title,
       description: description,
@@ -73,8 +76,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       completedSteps: 0,
     );
 
-    _taskService.addTask(newTask);
-    setState(() {});
+    // ✅ ИСПРАВЛЕНО: используем Riverpod
+    ref.read(tasksProvider.notifier).addTask(newTask);
 
     widget.onProjectUpdated(_project);
 

@@ -205,7 +205,10 @@ class _ExpandableTaskCardState extends ConsumerState<ExpandableTaskCard> {
   }
 
   void _loadSubTasks() {
-    _subTasks = widget.taskService.getSubTasks(widget.task.id);
+    // ✅ ИСПРАВЛЕНО: получаем подзадачи из Riverpod состояния
+    final allTasks = ref.read(tasksProvider);
+    _subTasks =
+        allTasks.where((task) => task.parentId == widget.task.id).toList();
   }
 
   @override
@@ -272,7 +275,8 @@ class _ExpandableTaskCardState extends ConsumerState<ExpandableTaskCard> {
       maxDepth: currentTask.maxDepth,
     );
 
-    widget.taskService.addTask(newSubTask);
+    // ✅ ИСПРАВЛЕНО: используем Riverpod вместо прямого вызова
+    ref.read(tasksProvider.notifier).addTask(newSubTask);
     _loadSubTasks();
 
     setState(() {
@@ -303,20 +307,22 @@ class _ExpandableTaskCardState extends ConsumerState<ExpandableTaskCard> {
   }
 
   void _updateSubTask(Task updatedSubTask) {
-    widget.taskService.updateTask(updatedSubTask);
+    // ✅ ИСПРАВЛЕНО: используем Riverpod вместо прямого вызова
+    ref.read(tasksProvider.notifier).updateTask(updatedSubTask);
     widget.onTaskUpdated(widget.task);
   }
 
   void _deleteSubTask(String subTaskId) {
-    widget.taskService.removeTask(subTaskId);
+    // ✅ ИСПРАВЛЕНО: используем Riverpod вместо прямого вызова
+    ref.read(tasksProvider.notifier).removeTask(subTaskId);
     _loadSubTasks();
     widget.onTaskUpdated(widget.task);
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentTask =
-        ref.watch(taskByIdProvider(widget.task.id)) ?? widget.task;
+    final currentTask = ref.watch(taskByIdProvider(widget.task.id)) ??
+        widget.task; // ✅ ДОБАВЛЕНО
     final hasSubTasks = _subTasks.isNotEmpty;
 
     return Container(
@@ -381,7 +387,7 @@ class _ExpandableTaskCardState extends ConsumerState<ExpandableTaskCard> {
                         ),
                       ),
                     TaskProgressWidget(
-                      taskId: widget.task.id,
+                      taskId: widget.task.id, // ✅ Передаем только ID
                       onTap: _openTaskDetail,
                     ),
                     const SizedBox(width: 6),
